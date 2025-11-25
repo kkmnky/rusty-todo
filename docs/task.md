@@ -1,0 +1,51 @@
+# 開発タスクリスト
+
+1. [x] ルート構成を分離する: `backend/` に Rust プロジェクト、`frontend/` に UI を配置
+2. [x] Backend を初期化する: `backend/` で `cargo new --bin rusty-todo`、`kernel/` `adapter/` `api/` `registry/` `shared/` を用意
+3. [ ] 共通設定を整える: `.gitignore` `rust-toolchain.toml` `Makefile.toml`（fmt/clippy/test タスク）、`Dockerfile` `compose.yaml` 叩き台を置く
+4. [ ] Cargo 依存を追加する: `actix-web` `serde` `serde_json` `sqlx`(+postgres) `argon2` `jsonwebtoken` `chrono` `uuid` `config` `anyhow` `thiserror`
+5. [ ] ドメインを定義する: User（id/email/password_hash/created_at）、Todo（id/user_id/title/description?/status/due?/created_at/updated_at）、Status(enum)
+6. [ ] DB 基盤を整える: 接続設定（.env/config）、接続プール、`sqlx migrate` 初期化、ヘルスチェックエンドポイント
+7. [ ] ユーザ CRUD を実装する: ドメイン/ユースケース/リポジトリ/エンドポイント（例: `POST /auth/signup`, `POST /auth/login`, `GET/PUT/DELETE /users/{id}` 等）
+   - エンドポイント（/api/v1 配下、rusty-book-manager と同一仕様）:
+     - POST `/auth/login`
+     - POST `/auth/logout`
+     - GET `/users/me`
+     - PUT `/users/me/password`
+     - GET `/users/me/checkouts`
+     - GET `/users`
+     - POST `/users`
+     - DELETE `/users/:user_id`
+     - PUT `/users/:user_id/role`
+   - サブタスク:
+     - [ ] ドメイン/ユースケースを定義（登録・認証・ロール変更・自己情報取得/更新）
+     - [ ] リポジトリ実装（保存/取得/更新/削除、ロール更新）
+     - [ ] ハンドラ/ルーター実装（上記エンドポイント）
+     - [ ] JWT/セッション設定とミドルウェア実装
+     - [ ] 入力バリデーションとエラーハンドリング
+8. [ ] ユーザ用マイグレーションを作成・適用する: users テーブル、必要ならインデックス
+9. [ ] ユーザ機能の動作確認をする: 統合テストまたは手動でサインアップ→ログイン→取得/更新/削除を確認
+10. [ ] Todo CRUD を実装する: ドメイン/ユースケース/リポジトリ/エンドポイント（`GET /todos`, `GET /todos/{id}`, `POST /todos`, `PUT /todos/{id}`, `DELETE /todos/{id}`）
+    - エンドポイント（/api/v1 配下、book API を Todo に読み替え）:
+      - GET `/todos`
+      - POST `/todos`
+      - GET `/todos/:todo_id`
+      - PUT `/todos/:todo_id`
+      - DELETE `/todos/:todo_id`
+      - GET `/todos/completed`（完了済み一覧。books/checkouts の一覧相当の補助ビュー）
+      - POST `/todos/:todo_id/complete`（完了アクション。books/:id/checkouts 相当）
+      - PUT `/todos/:todo_id/complete/:completion_id/reopen`（再オープン。returned 相当）
+      - GET `/todos/:todo_id/history`（状態遷移履歴。checkout-history 相当）
+    - サブタスク:
+      - [ ] ドメイン/ユースケースを定義（作成・取得・更新・削除・完了/再開・履歴）
+      - [ ] リポジトリ実装（Todo 保存/検索、履歴管理）
+      - [ ] ハンドラ/ルーター実装（上記エンドポイント）
+      - [ ] 入力バリデーションとエラーハンドリング
+11. [ ] Todo 用マイグレーションを作成・適用する: todos テーブル（user_id FK, status, timestamps 等）
+12. [ ] Todo 機能の動作確認をする: 統合テストまたは手動で作成→一覧→更新→削除を確認
+13. [ ] テストを揃える: ユニット（ドメイン/ハッシュ/JWT）、統合（サインアップ→ログイン→Todo CRUD）、Lint/Format（`cargo fmt`, `cargo clippy`, `cargo test`）
+14. [ ] Frontend を初期化する: `frontend/` を Vite+React 等でセットアップし、eslint/prettier を設定
+15. [ ] Frontend 認証を作る: サインアップ/ログイン画面、JWT 保存と付与を実装
+16. [ ] Frontend Todo UI を作る: 一覧/追加/編集/削除/完了トグル、API 連携と基本バリデーション
+17. [ ] ドキュメントを整える: README にセットアップ手順、環境変数例（`.env.example`）、主要コマンド、API エンドポイントを記載
+18. [ ] コンテナ動作を確認する: `docker compose up` で backend+db(+frontend) が起動することを確認

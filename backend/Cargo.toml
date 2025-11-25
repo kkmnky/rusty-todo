@@ -1,0 +1,40 @@
+[package]
+name = "rusty-todo"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "app"
+path = "src/bin/app.rs"
+
+[workspace]
+members = ["api", "kernel", "adapter", "shared", "registry"]
+
+[workspace.package]
+edition = "2024"
+publish = false
+license = "MIT"
+
+[workspace.dependencies]
+adapter = { path = "./adapter" }
+api = { path = "./api" }
+kernel = { path = "./kernel" }
+shared = { path = "./shared" }
+registry = { path = "./registry" }
+anyhow = "1.0.100"
+axum = "0.8.7"
+tokio = { version = "1.48.0", features = ["full"] }
+serde = { version = "1.0.228", features = ["derive"] }
+strum = { version = "0.27.2", features = ["derive"] }
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.20", features = ["env-filter", "json"] }
+
+[dependencies]
+axum = { workspace = true }
+tokio = { workspace = true }
+anyhow = { workspace = true }
+shared = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
