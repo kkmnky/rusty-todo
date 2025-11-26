@@ -1,4 +1,5 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
+use api::route::v1;
 use axum::{Router, routing::get};
 use shared::env::{Environment, which};
 use std::net::{Ipv4Addr, SocketAddr};
@@ -9,14 +10,24 @@ use tracing_subscriber::{EnvFilter, Registry, layer::SubscriberExt, util::Subscr
 async fn main() -> Result<()> {
     init_telemetry()?;
 
-    let app = Router::new().route("/", get(|| async { "Hello, World!" }));
+    let app = Router::new()
+        .merge(v1::routes())
+        .route("/", get(|| async { "Hello, World!" }));
 
     let addr = SocketAddr::new(Ipv4Addr::LOCALHOST.into(), 8080);
     let listener = TcpListener::bind(addr).await?;
     tracing::info!("Listening on {}", addr);
 
-    axum::serve(listener, app).await?;
-    Ok(())
+    axum::serve(listener, app)
+        .await
+        .context("Failed to bind to address")
+        .inspect_err(|e| {
+            tracing::error!(
+                error.cause_chain = ?e,
+                error.message = %e,
+                "Failed to bind to address"
+            );
+        })
 }
 
 fn init_telemetry() -> Result<()> {
