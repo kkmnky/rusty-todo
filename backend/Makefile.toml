@@ -1,5 +1,10 @@
 [config]
+# cargo workspace を使っている状態で cargo-make のワークスペースを使うと
+# 自動的に各クレートの中の `Makefile.toml` を読み込んで「コマンドないエラー」が出るのでオフにしておく。
 default_to_workspace = false
+# 全然使わないタスクが候補に出てきて邪魔だったり、コマンド名が被ってエラーになったりしてめんどくさいので無視する。
+skip_core_tasks = true
+on_error_task = "sound-error"
 
 [env]
 HOST = "0.0.0.0"
@@ -15,6 +20,8 @@ AUTH_TOKEN_TTL = 86400
 
 # Docker Composeのネットワーク内でのDB等への接続情報
 [tasks.set-env-docker.env]
+description = "Docker Compose 上での環境変数を設定する。"
+category = "Meta"
 DATABASE_HOST = "postgres"
 DATABASE_PORT = "${DATABASE_PORT_INNER}"
 DATABASE_URL = "postgresql://${DATABASE_HOST}:${DATABASE_PORT}/${DATABASE_NAME}?user=${DATABASE_USERNAME}&password=${DATABASE_PASSWORD}"
@@ -25,6 +32,8 @@ JAEGER_PORT = 6831
 
 # Docker Compose外からDB等にアクセスする際の接続情報
 [tasks.set-env-local.env]
+description = "ローカル環境での環境変数を設定する。"
+category = "Meta"
 DATABASE_HOST = "localhost"
 DATABASE_PORT = "${DATABASE_PORT_OUTER}"
 DATABASE_URL = "postgresql://${DATABASE_HOST}:${DATABASE_PORT}/${DATABASE_NAME}?user=${DATABASE_USERNAME}&password=${DATABASE_PASSWORD}"
@@ -35,10 +44,13 @@ JAEGER_PORT = 6831
 
 [tasks.list]
 description = "タスクの一覧を表示する。"
+category = "Meta"
 command = "cargo"
 args = ["make", "--list-all-steps"]
 
 [tasks.before-build]
+description = "実行前に依存サービスを起動して準備する。"
+category = "Dev"
 run_task = [
   { name = [
     "compose-up-db",
@@ -49,6 +61,8 @@ run_task = [
 ]
 
 [tasks.compose-build-app]
+description = "Docker Compose 上で app イメージをビルドする。"
+category = "Docker"
 extend = "set-env-local"
 command = "docker"
 args = [
@@ -61,30 +75,40 @@ args = [
 ]
 
 [tasks.run]
+description = "ローカル環境でアプリを起動する。"
+category = "ローカル開発セットアップ"
 extend = "set-env-local"
 dependencies = ["before-build"]
 command = "cargo"
 args = ["run", "${@}"]
 
 [tasks.run-in-docker]
+description = "Compose 上でアプリコンテナを起動する。"
+category = "Docker"
 extend = "set-env-docker"
 dependencies = ["before-build", "compose-build-app"]
 command = "docker"
 args = ["compose", "up", "-d", "app"]
 
 [tasks.logs]
+description = "Compose サービスのログを表示する。"
+category = "Docker"
 extend = "set-env-docker"
 dependencies = ["before-build"]
 command = "docker"
 args = ["compose", "logs", "${@}"]
 
 [tasks.build]
+description = "ローカル環境でビルドする。"
+category = "ローカル開発セットアップ"
 extend = "set-env-local"
 dependencies = ["before-build"]
 command = "cargo"
 args = ["build", "${@}"]
 
 [tasks.check]
+description = "ローカル環境でコンパイルチェックを行う。"
+category = "ローカル開発セットアップ"
 extend = "set-env-local"
 dependencies = ["before-build"]
 command = "cargo"
@@ -94,22 +118,30 @@ args = ["check"]
 ### Development
 
 [tasks.watch]
+description = "fmt/clippy/test を監視実行する。"
+category = "Dev"
 extend = "set-env-local"
 dependencies = ["before-build"]
 run_task = [{ name = ["fmt", "clippy", "test"] }]
 watch = true
 
 [tasks.fmt]
+description = "ワークスペース全体をフォーマットする。"
+category = "Dev"
 extend = "set-env-local"
 command = "cargo"
 args = ["fmt", "--all", "${@}"]
 
 [tasks.clippy]
+description = "ワークスペースに clippy を実行する。"
+category = "Dev"
 extend = "set-env-local"
 command = "cargo"
 args = ["clippy", "--all", "--all-targets", "${@}"]
 
 [tasks.test]
+description = "cargo nextest で全テストを実行する。"
+category = "Test"
 extend = "set-env-local"
 install_crate = { crate_name = "cargo-nextest", binary = "cargo", test_arg = [
   "nextest",
@@ -126,19 +158,30 @@ args = [
 ]
 
 [tasks.clippy-ci]
+description = "CI 向けに clippy を警告エラー化で実行する。"
+category = "Dev"
 extend = "set-env-local"
 dependencies = ["before-build"]
 command = "cargo"
 args = ["clippy", "--", "--no-deps", "-Dwarnings"]
 
 [tasks.test-ci]
+description = "CI 向けのテストタスク（事前準備付き）。"
+category = "Test"
 dependencies = ["before-build"]
 run_task = "test"
 
+[tasks.clean]
+description = "ビルドキャッシュを削除する。"
+# sqlx のビルドキャッシュも消すために各クレート内の `target` ディレクトリも削除する。
+script = "cargo clean && find . -name 'target' -type d | xargs rm -rf"
+category = "ローカル開発終了"
 
 ### Migration
 
 [tasks.migrate]
+description = "sqlx-cli で DB マイグレーションを実行する（リトライ付き）。"
+category = "Database"
 extend = "set-env-local"
 install_crate = { crate_name = "sqlx-cli", binary = "sqlx", test_arg = "--help", version = "0.7.3" }
 script = '''
@@ -149,12 +192,16 @@ done
 '''
 
 [tasks.sqlx]
+description = "sqlx-cli を環境変数付きで実行する。"
+category = "Database"
 extend = "set-env-local"
 install_crate = { crate_name = "sqlx-cli", binary = "sqlx", test_arg = "--help", version = "0.7.3" }
 command = "sqlx"
 args = ["${@}", "--source", "adapter/migrations"]
 
 [tasks.psql]
+description = "psql でローカル DB に接続する。"
+category = "Database"
 extend = "set-env-local"
 command = "docker"
 args = [
@@ -172,6 +219,8 @@ args = [
 ]
 
 [tasks.initial-setup]
+description = "初期データ投入スクリプトを実行する。"
+category = "ローカル開発セットアップ"
 extend = "set-env-local"
 command = "docker"
 args = [
@@ -193,36 +242,50 @@ args = [
 ### Docker Compose
 
 [tasks.compose]
+description = "docker compose コマンドのラッパー。"
+category = "Docker"
 extend = "set-env-docker"
 command = "docker"
 args = ["compose", "${@}"]
 
 [tasks.compose-up-db]
+description = "Compose で Postgres を起動する。"
+category = "Docker"
 extend = "set-env-docker"
 command = "docker"
 args = ["compose", "up", "-d", "postgres"]
 
 [tasks.compose-up-redis]
+description = "Compose で Redis を起動する。"
+category = "Docker"
 extend = "set-env-docker"
 command = "docker"
 args = ["compose", "up", "-d", "redis"]
 
 [tasks.compose-up-jaeger]
+description = "Compose で Jaeger を起動する。"
+category = "Docker"
 extend = "set-env-docker"
 command = "docker"
 args = ["compose", "up", "-d", "jaeger"]
 
 [tasks.compose-down]
+description = "Compose のサービスを停止する。"
+category = "Docker"
 extend = "set-env-docker"
 command = "docker"
 args = ["compose", "down"]
 
 [tasks.compose-remove]
+description = "Compose のサービスを停止しボリュームも削除する。"
+category = "ローカル開発終了"
 extend = "set-env-docker"
 command = "docker"
 args = ["compose", "down", "-v"]
 
 [tasks.create-hash]
+description = "bcrypt でパスワードハッシュを生成する。"
+category = "Tools"
 script_runner = "@rust"
 script = '''
 //! ```cargo
@@ -234,4 +297,39 @@ fn main() {
     let hashed = bcrypt::hash(password, bcrypt::DEFAULT_COST).unwrap();
     println!("{}", hashed);
 }
+'''
+
+# ===== その他 =====
+[tasks.sound-complete]
+description = "作業が完了したときの音を鳴らす。"
+private = true
+run_task = [
+  # おやこ手帳チームでは基本的に macOS 用の準備しかしていないので他は考慮をしていない場合が多いが、
+  # CI などでエラーにならないように macOS でのみ音を鳴らすようにしてある。
+  { name = "sound-complete-mac", condition = { platforms = ["mac"] } },
+]
+
+[tasks.sound-complete-mac]
+description = "作業が完了したときの音を鳴らす。（macOS）"
+private = true
+script = '''
+#!/usr/bin/env bash
+
+afplay -t 0.3 /System/Library/Sounds/Glass.aiff
+afplay -t 0.3 /System/Library/Sounds/Glass.aiff
+afplay -t 0.3 /System/Library/Sounds/Glass.aiff
+'''
+
+[tasks.sound-error]
+description = "作業が失敗したときの音を鳴らす。"
+private = true
+run_task = [{ name = "sound-error-mac", condition = { platforms = ["mac"] } }]
+
+[tasks.sound-error-mac]
+description = "作業が失敗したときの音を鳴らす。(macOS)"
+private = true
+script = '''
+#!/usr/bin/env bash
+
+afplay -t 0.3 /System/Library/Sounds/Submarine.aiff
 '''
