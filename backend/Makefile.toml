@@ -17,6 +17,7 @@ DATABASE_PORT_INNER = 5432
 REDIS_PORT_OUTER = 6379
 REDIS_PORT_INNER = 6379
 AUTH_TOKEN_TTL = 86400
+LOADTEST_HOST = "http://localhost:8080"
 
 # Docker Composeのネットワーク内でのDB等への接続情報
 [tasks.set-env-docker.env]
@@ -298,6 +299,14 @@ fn main() {
     println!("{}", hashed);
 }
 '''
+
+### Load Test
+
+[tasks.loadtest]
+description = "Goose で / に軽負荷をかける。"
+category = "LoadTest"
+command = "cargo"
+args = ["run", "-p", "loadtest", "--", "${@}"]
 
 # ===== その他 =====
 [tasks.sound-complete]
