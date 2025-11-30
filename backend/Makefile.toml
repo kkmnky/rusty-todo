@@ -55,9 +55,9 @@ category = "Dev"
 run_task = [
   { name = [
     "compose-up-db",
-    "migrate",
-    "compose-up-redis",
-    "compose-up-jaeger",
+    # "migrate",
+    # "compose-up-redis",
+    # "compose-up-jaeger",
   ] },
 ]
 

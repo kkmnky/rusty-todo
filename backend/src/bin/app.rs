@@ -1,7 +1,12 @@
+use adapter::database::connect_database_with;
 use anyhow::{Context, Result};
 use api::route::v1;
 use axum::{Router, routing::get};
-use shared::env::{Environment, which};
+use registry::AppRegistry;
+use shared::{
+    config::AppConfig,
+    env::{Environment, which},
+};
 use std::net::{Ipv4Addr, SocketAddr};
 use tokio::net::TcpListener;
 use tracing_subscriber::{EnvFilter, Registry, layer::SubscriberExt, util::SubscriberInitExt};
@@ -10,9 +15,15 @@ use tracing_subscriber::{EnvFilter, Registry, layer::SubscriberExt, util::Subscr
 async fn main() -> Result<()> {
     init_telemetry()?;
 
+    let app_config = AppConfig::new()?;
+
+    let pool = connect_database_with(&app_config);
+    let registry = AppRegistry::new(pool);
+
     let app = Router::new()
         .merge(v1::routes())
-        .route("/", get(|| async { "Hello, World!" }));
+        .route("/", get(|| async { "Hello, World!" }))
+        .with_state(registry);
 
     let addr = SocketAddr::new(Ipv4Addr::LOCALHOST.into(), 8080);
     let listener = TcpListener::bind(addr).await?;
