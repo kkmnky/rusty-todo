@@ -16,7 +16,7 @@ Rust で Todo アプリケーションを一から作る個人学習プロジェ
 
 ### バックエンド
 - `backend/`: Rust 製のコアアプリ。主なサブディレクトリは `src`（エントリ）、`kernel`（ドメイン）、`adapter`（外部 I/O）、`api`（公開インタフェース）、`registry`（組み立て）、`shared`（共通ユーティリティ）。
-- `backend/Makefile.toml`, `backend/rust-toolchain.toml`: fmt/clippy/test をまとめたタスクとツールチェーン固定。
+- `Makefile.toml`, `backend/rust-toolchain.toml`: fmt/clippy/test をまとめたタスクとツールチェーン固定。
 - `backend/compose.yaml`: ローカル開発用コンテナ起動。
 - 主な使用ライブラリ: axum（HTTP）, tokio（非同期）, tracing/tracing-subscriber（ログ）, strum（環境判定）。
 - 詳細なアーキテクチャは [backend/README.md](/backend/README.md) を参照。

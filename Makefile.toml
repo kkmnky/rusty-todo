@@ -49,9 +49,9 @@ category = "Meta"
 command = "cargo"
 args = ["make", "--list-all-steps"]
 
-[tasks.before-build]
+[tasks."bk:before-build"]
 description = "実行前に依存サービスを起動して準備する。"
-category = "Dev"
+category = "Backend Dev"
 run_task = [
   { name = [
     "compose-up-db",
@@ -65,6 +65,7 @@ run_task = [
 description = "Docker Compose 上で app イメージをビルドする。"
 category = "Docker"
 extend = "set-env-local"
+cwd = "backend"
 command = "docker"
 args = [
   "compose",
@@ -75,11 +76,12 @@ args = [
   "${@}",
 ]
 
-[tasks.run]
-description = "ローカル環境でアプリを起動する。"
+[tasks."bk:run"]
+description = "バックエンドをローカル環境で起動する。"
 category = "ローカル開発セットアップ"
 extend = "set-env-local"
-dependencies = ["before-build"]
+dependencies = ["bk:before-build"]
+cwd = "backend"
 command = "cargo"
 args = ["run", "${@}"]
 
@@ -87,7 +89,8 @@ args = ["run", "${@}"]
 description = "Compose 上でアプリコンテナを起動する。"
 category = "Docker"
 extend = "set-env-docker"
-dependencies = ["before-build", "compose-build-app"]
+dependencies = ["bk:before-build", "compose-build-app"]
+cwd = "backend"
 command = "docker"
 args = ["compose", "up", "-d", "app"]
 
@@ -95,55 +98,61 @@ args = ["compose", "up", "-d", "app"]
 description = "Compose サービスのログを表示する。"
 category = "Docker"
 extend = "set-env-docker"
-dependencies = ["before-build"]
+dependencies = ["bk:before-build"]
+cwd = "backend"
 command = "docker"
 args = ["compose", "logs", "${@}"]
 
-[tasks.build]
-description = "ローカル環境でビルドする。"
+[tasks."bk:build"]
+description = "バックエンドをローカル環境でビルドする。"
 category = "ローカル開発セットアップ"
 extend = "set-env-local"
-dependencies = ["before-build"]
+dependencies = ["bk:before-build"]
+cwd = "backend"
 command = "cargo"
 args = ["build", "${@}"]
 
-[tasks.check]
-description = "ローカル環境でコンパイルチェックを行う。"
+[tasks."bk:check"]
+description = "バックエンドのコンパイルチェックを行う。"
 category = "ローカル開発セットアップ"
 extend = "set-env-local"
-dependencies = ["before-build"]
+cwd = "backend"
 command = "cargo"
 args = ["check"]
 
 
 ### Development
 
-[tasks.watch]
+[tasks."bk:watch"]
 description = "fmt/clippy/test を監視実行する。"
-category = "Dev"
+category = "Backend Dev"
 extend = "set-env-local"
-dependencies = ["before-build"]
-run_task = [{ name = ["fmt", "clippy", "test"] }]
+dependencies = ["bk:before-build"]
+cwd = "backend"
+run_task = [{ name = ["bk:fmt", "bk:clippy", "bk:test"] }]
 watch = true
 
-[tasks.fmt]
+[tasks."bk:fmt"]
 description = "ワークスペース全体をフォーマットする。"
-category = "Dev"
+category = "Backend Dev"
 extend = "set-env-local"
+cwd = "backend"
 command = "cargo"
 args = ["fmt", "--all", "${@}"]
 
-[tasks.clippy]
+[tasks."bk:clippy"]
 description = "ワークスペースに clippy を実行する。"
-category = "Dev"
+category = "Backend Dev"
 extend = "set-env-local"
+cwd = "backend"
 command = "cargo"
 args = ["clippy", "--all", "--all-targets", "${@}"]
 
-[tasks.test]
-description = "cargo nextest で全テストを実行する。"
-category = "Test"
+[tasks."bk:test"]
+description = "バックエンドのテストを cargo nextest で実行する。"
+category = "Backend Tests"
 extend = "set-env-local"
+cwd = "backend"
 install_crate = { crate_name = "cargo-nextest", binary = "cargo", test_arg = [
   "nextest",
   "--help",
@@ -158,25 +167,27 @@ args = [
   "--test-threads=1",
 ]
 
-[tasks.clippy-ci]
+[tasks."bk:clippy-ci"]
 description = "CI 向けに clippy を警告エラー化で実行する。"
-category = "Dev"
+category = "Backend Dev"
 extend = "set-env-local"
-dependencies = ["before-build"]
+dependencies = ["bk:before-build"]
+cwd = "backend"
 command = "cargo"
 args = ["clippy", "--", "--no-deps", "-Dwarnings"]
 
-[tasks.test-ci]
-description = "CI 向けのテストタスク（事前準備付き）。"
-category = "Test"
-dependencies = ["before-build"]
-run_task = "test"
+[tasks."bk:test-ci"]
+description = "バックエンドのテストを CI 向けに実行する（事前準備付き）。"
+category = "Backend Tests"
+dependencies = ["bk:before-build"]
+run_task = "bk:test"
 
 [tasks.clean]
 description = "ビルドキャッシュを削除する。"
 # sqlx のビルドキャッシュも消すために各クレート内の `target` ディレクトリも削除する。
-script = "cargo clean && find . -name 'target' -type d | xargs rm -rf"
 category = "ローカル開発終了"
+cwd = "backend"
+script = "cargo clean && find . -name 'target' -type d | xargs rm -rf"
 
 ### Migration
 
@@ -184,6 +195,7 @@ category = "ローカル開発終了"
 description = "sqlx-cli で DB マイグレーションを実行する（リトライ付き）。"
 category = "Database"
 extend = "set-env-local"
+cwd = "backend"
 install_crate = { crate_name = "sqlx-cli", binary = "sqlx", test_arg = "--help", version = "0.7.3" }
 script = '''
 #!/bin/bash
@@ -196,6 +208,7 @@ done
 description = "sqlx-cli を環境変数付きで実行する。"
 category = "Database"
 extend = "set-env-local"
+cwd = "backend"
 install_crate = { crate_name = "sqlx-cli", binary = "sqlx", test_arg = "--help", version = "0.7.3" }
 command = "sqlx"
 args = ["${@}", "--source", "adapter/migrations"]
@@ -204,6 +217,7 @@ args = ["${@}", "--source", "adapter/migrations"]
 description = "psql でローカル DB に接続する。"
 category = "Database"
 extend = "set-env-local"
+cwd = "backend"
 command = "docker"
 args = [
   "run",
@@ -223,6 +237,7 @@ args = [
 description = "初期データ投入スクリプトを実行する。"
 category = "ローカル開発セットアップ"
 extend = "set-env-local"
+cwd = "backend"
 command = "docker"
 args = [
   "run",
@@ -246,6 +261,7 @@ args = [
 description = "docker compose コマンドのラッパー。"
 category = "Docker"
 extend = "set-env-docker"
+cwd = "backend"
 command = "docker"
 args = ["compose", "${@}"]
 
@@ -253,6 +269,7 @@ args = ["compose", "${@}"]
 description = "Compose で Postgres を起動する。"
 category = "Docker"
 extend = "set-env-docker"
+cwd = "backend"
 command = "docker"
 args = ["compose", "up", "-d", "postgres"]
 
@@ -260,6 +277,7 @@ args = ["compose", "up", "-d", "postgres"]
 description = "Compose で Redis を起動する。"
 category = "Docker"
 extend = "set-env-docker"
+cwd = "backend"
 command = "docker"
 args = ["compose", "up", "-d", "redis"]
 
@@ -267,6 +285,7 @@ args = ["compose", "up", "-d", "redis"]
 description = "Compose で Jaeger を起動する。"
 category = "Docker"
 extend = "set-env-docker"
+cwd = "backend"
 command = "docker"
 args = ["compose", "up", "-d", "jaeger"]
 
@@ -274,6 +293,7 @@ args = ["compose", "up", "-d", "jaeger"]
 description = "Compose のサービスを停止する。"
 category = "Docker"
 extend = "set-env-docker"
+cwd = "backend"
 command = "docker"
 args = ["compose", "down"]
 
@@ -281,6 +301,7 @@ args = ["compose", "down"]
 description = "Compose のサービスを停止しボリュームも削除する。"
 category = "ローカル開発終了"
 extend = "set-env-docker"
+cwd = "backend"
 command = "docker"
 args = ["compose", "down", "-v"]
 
@@ -305,8 +326,61 @@ fn main() {
 [tasks.loadtest]
 description = "Goose で / に軽負荷をかける。"
 category = "LoadTest"
+cwd = "backend"
 command = "cargo"
 args = ["run", "-p", "loadtest", "--", "${@}"]
+
+### Frontend
+
+[tasks."fr:install"]
+description = "pnpm で依存関係をインストールする。"
+category = "Frontend"
+command = "pnpm"
+args = ["-C", "frontend", "install", "${@}"]
+
+[tasks."fr:dev"]
+description = "フロントエンド開発サーバを起動する。"
+category = "Frontend"
+command = "pnpm"
+args = ["-C", "frontend", "dev", "${@}"]
+
+[tasks."fr:build"]
+description = "フロントエンドをビルドする。"
+category = "Frontend"
+command = "pnpm"
+args = ["-C", "frontend", "build", "${@}"]
+
+[tasks."fr:lint"]
+description = "フロントエンドの Lint を実行する。"
+category = "Frontend"
+command = "pnpm"
+args = ["-C", "frontend", "lint", "${@}"]
+
+[tasks."fr:test"]
+description = "フロントエンドのテストを実行する。"
+category = "Frontend"
+command = "pnpm"
+args = ["-C", "frontend", "test", "${@}"]
+
+### Observability
+
+[tasks."obs:up"]
+description = "観測系を起動する。"
+category = "Observability"
+command = "docker"
+args = ["compose", "-f", "observability/compose.yaml", "up", "-d", "${@}"]
+
+[tasks."obs:down"]
+description = "観測系を停止する。"
+category = "Observability"
+command = "docker"
+args = ["compose", "-f", "observability/compose.yaml", "down", "${@}"]
+
+[tasks."obs:logs"]
+description = "観測系のログを表示する。"
+category = "Observability"
+command = "docker"
+args = ["compose", "-f", "observability/compose.yaml", "logs", "${@}"]
 
 # ===== その他 =====
 [tasks.sound-complete]
