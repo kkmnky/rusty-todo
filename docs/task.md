@@ -2,9 +2,9 @@
 
 1. [x] ルート構成を分離する: `backend/` に Rust プロジェクト、`frontend/` に UI を配置
 2. [x] Backend を初期化する: `backend/` で `cargo new --bin rusty-todo`、`kernel/` `adapter/` `api/` `registry/` `shared/` を用意
-3. [ ] 共通設定を整える: `.gitignore` `rust-toolchain.toml` `Makefile.toml`（fmt/clippy/test タスク）、`Dockerfile` `compose.yaml` 叩き台を置く
-4. [ ] Cargo 依存を追加する: `actix-web` `serde` `serde_json` `sqlx`(+postgres) `argon2` `jsonwebtoken` `chrono` `uuid` `config` `anyhow` `thiserror`
-5. [ ] ドメインを定義する: User（id/email/password_hash/created_at）、Todo（id/user_id/title/description?/status/due?/created_at/updated_at）、Status(enum)
+3. [x] 共通設定を整える: `.gitignore` `rust-toolchain.toml` `Makefile.toml`（fmt/clippy/test タスク）、`Dockerfile` `compose.yaml` 叩き台を置く
+4. [x] Cargo 依存を追加する: `actix-web` `serde` `serde_json` `sqlx`(+postgres) `argon2` `jsonwebtoken` `chrono` `uuid` `config` `anyhow` `thiserror`
+5. [x] ドメインを定義する: User（id/username/email/password_hash/created_at/updated_at）、Todo（id/user_id/title/status/due?/created_at/updated_at）、Status(enum)
 6. [ ] DB 基盤を整える: 接続設定（.env/config）、接続プール、`sqlx migrate` 初期化、ヘルスチェックエンドポイント
 7. [ ] ユーザ CRUD を実装する: ドメイン/ユースケース/リポジトリ/エンドポイント（例: `POST /auth/signup`, `POST /auth/login`, `GET/PUT/DELETE /users/{id}` 等）
    - エンドポイント（/api/v1 配下、rusty-book-manager と同一仕様）:
