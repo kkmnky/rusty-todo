@@ -9,3 +9,9 @@ publish.workspace = true
 registry = { workspace = true }
 axum = { workspace = true }
 anyhow = { workspace = true }
+mockall = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }
+kernel = { workspace = true }
+async-trait = { workspace = true }

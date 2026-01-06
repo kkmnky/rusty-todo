@@ -8,3 +8,4 @@ publish.workspace = true
 [dependencies]
 kernel = { workspace = true }
 adapter = { workspace = true }
+mockall = { workspace = true }

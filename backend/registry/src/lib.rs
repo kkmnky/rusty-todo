@@ -4,11 +4,11 @@ use adapter::{database::ConnectionPool, repository::health::HealthCheckRepositor
 use kernel::repository::health::HealthCheckRepository;
 
 #[derive(Clone)]
-pub struct AppRegistry {
+pub struct AppRegistryImpl {
     pub health_check_repository: Arc<dyn HealthCheckRepository>,
 }
 
-impl AppRegistry {
+impl AppRegistryImpl {
     pub fn new(pool: ConnectionPool) -> Self {
         let health_check_repository = Arc::new(HealthCheckRepositoryImpl::new(pool));
         Self {
@@ -20,3 +20,16 @@ impl AppRegistry {
         self.health_check_repository.clone()
     }
 }
+
+#[mockall::automock]
+pub trait AppRegistryExt {
+    fn health_check_repository(&self) -> Arc<dyn HealthCheckRepository>;
+}
+
+impl AppRegistryExt for AppRegistryImpl {
+    fn health_check_repository(&self) -> Arc<dyn HealthCheckRepository> {
+        self.health_check_repository.clone()
+    }
+}
+
+pub type AppRegistry = Arc<dyn AppRegistryExt + Send + Sync>;
