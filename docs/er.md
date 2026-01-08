@@ -6,8 +6,8 @@ erDiagram
 
     USERS {
         uuid id PK
+        varchar name
         varchar email
-        varchar username
         varchar password_hash
         timestamptz created_at
         timestamptz updated_at
@@ -17,7 +17,7 @@ erDiagram
         uuid id PK
         uuid user_id FK
         varchar title
-        varchar status
+        boolean completed
         timestamptz due_at
         timestamptz created_at
         timestamptz updated_at
@@ -26,5 +26,4 @@ erDiagram
 
 補足:
 - nullable: `todos.due_at`
-- `status` は enum 想定（例: `todo|doing|done`）
 - unique: `users.email`
