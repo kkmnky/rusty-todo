@@ -6,10 +6,15 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+kernel = { workspace = true }
 registry = { workspace = true }
+shared = { workspace = true }
 axum = { workspace = true }
 anyhow = { workspace = true }
 mockall = { workspace = true }
+serde = { workspace = true }
+garde = { workspace = true }
+derive-new = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true }
