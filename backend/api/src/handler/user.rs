@@ -20,12 +20,27 @@ pub async fn register_user(
 mod tests {
     use super::*;
     use axum::extract::State;
+    use kernel::model::{id::UserId, user::User};
+    use kernel::repository::user::{MockUserRepository, UserRepository};
     use registry::MockAppRegistryExt;
     use std::sync::Arc;
 
     #[tokio::test]
     async fn ユーザ追加は201と必要項目を返す() {
-        let registry: AppRegistry = Arc::new(MockAppRegistryExt::new());
+        let mut repo = MockUserRepository::new();
+        repo.expect_create().returning(|event| {
+            Ok(User {
+                id: UserId::new(),
+                name: event.name,
+                email: event.email,
+            })
+        });
+
+        let mut registry = MockAppRegistryExt::new();
+        let repo_arc: Arc<dyn UserRepository> = Arc::new(repo);
+        registry.expect_user_repository().return_const(repo_arc.clone());
+
+        let registry: AppRegistry = Arc::new(registry);
         let req = CreateUserRequest::new(
             "Alice".to_string(),
             "alice@example.com".to_string(),
