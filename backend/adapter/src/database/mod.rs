@@ -5,6 +5,10 @@ use sqlx::{PgPool, postgres::PgConnectOptions};
 pub struct ConnectionPool(PgPool);
 
 impl ConnectionPool {
+    pub fn new(pool: PgPool) -> Self {
+        Self(pool)
+    }
+
     pub fn inner_ref(&self) -> &PgPool {
         &self.0
     }

@@ -17,22 +17,44 @@
      | PUT | `/api/v1/users/me/password` | 自分パスワード更新 | `change_password` |
      | POST | `/api/v1/auth/login` | ログイン | `auth_login` |
      | POST | `/api/v1/auth/logout` | ログアウト | `auth_logout` |
-   - サブタスク:
-     - [ ] テスト: `POST /api/v1/users` 正常系
-     - [ ] テスト: `POST /api/v1/users` 異常系
-     - [ ] テスト: `GET /api/v1/users` 正常系
-     - [ ] テスト: `GET /api/v1/users` 異常系
-     - [ ] テスト: `DELETE /api/v1/users/:user_id` 正常系
-     - [ ] テスト: `DELETE /api/v1/users/:user_id` 異常系
-     - [ ] テスト: `GET /api/v1/users/me` 正常系
-     - [ ] テスト: `GET /api/v1/users/me` 異常系
-     - [ ] テスト: `PUT /api/v1/users/me/password` 正常系
-     - [ ] テスト: `PUT /api/v1/users/me/password` 異常系
-     - [ ] 追加: ユーザ取得を実装後、パスワード一致（ハッシュ検証）のテストを追加
-     - [ ] テスト: `POST /api/v1/auth/login` 正常系
-     - [ ] テスト: `POST /api/v1/auth/login` 異常系
-     - [ ] テスト: `POST /api/v1/auth/logout` 正常系
-     - [ ] テスト: `POST /api/v1/auth/logout` 異常系
+  - サブタスク:
+    - 方針: CRUDは操作ごとにテストを分割。順番は Adapter → API。
+    - ユーザ作成:
+      - [x] テスト(Adapter): ユーザ作成 正常系
+        - 作成成功し返却Userのname/emailが一致する
+        - usersに1件作成されpassword_hashは平文と不一致
+        - password_hashのbcrypt検証がtrue
+      - [ ] テスト(Adapter): ユーザ作成 異常系
+      - [x] テスト(API): `POST /api/v1/users` 正常系
+      - [ ] テスト(API): `POST /api/v1/users` 異常系
+    - ユーザ一覧取得:
+      - [ ] テスト(Adapter): ユーザ一覧取得 正常系
+      - [ ] テスト(Adapter): ユーザ一覧取得 異常系
+      - [ ] テスト(API): `GET /api/v1/users` 正常系
+      - [ ] テスト(API): `GET /api/v1/users` 異常系
+    - ユーザ削除:
+      - [ ] テスト(Adapter): ユーザ削除 正常系
+      - [ ] テスト(Adapter): ユーザ削除 異常系
+      - [ ] テスト(API): `DELETE /api/v1/users/:user_id` 正常系
+      - [ ] テスト(API): `DELETE /api/v1/users/:user_id` 異常系
+    - 自分情報取得:
+      - [ ] テスト(Adapter): ユーザ取得（ID）正常系
+      - [ ] テスト(Adapter): ユーザ取得（ID）異常系
+      - [ ] テスト(API): `GET /api/v1/users/me` 正常系
+      - [ ] テスト(API): `GET /api/v1/users/me` 異常系
+    - パスワード更新:
+      - [ ] テスト(Adapter): パスワード更新 正常系
+      - [ ] テスト(Adapter): パスワード更新 異常系
+      - [ ] テスト(API): `PUT /api/v1/users/me/password` 正常系
+      - [ ] テスト(API): `PUT /api/v1/users/me/password` 異常系
+    - 認証:
+      - [ ] テスト(Adapter): ユーザ取得（メール）正常系
+      - [ ] テスト(Adapter): ユーザ取得（メール）異常系
+      - [ ] 追加(Adapter): ユーザ取得を実装後、パスワード一致（ハッシュ検証）のテストを追加
+      - [ ] テスト(API): `POST /api/v1/auth/login` 正常系
+      - [ ] テスト(API): `POST /api/v1/auth/login` 異常系
+      - [ ] テスト(API): `POST /api/v1/auth/logout` 正常系
+      - [ ] テスト(API): `POST /api/v1/auth/logout` 異常系
 8. [ ] ユーザ用マイグレーションを作成・適用する: users テーブル、必要ならインデックス
 9. [ ] ユーザ機能の動作確認をする: 統合テストまたは手動でサインアップ→ログイン→取得/更新/削除を確認
 10. [ ] Todo CRUD を実装する: ドメイン/ユースケース/リポジトリ/エンドポイント（`GET /todos`, `GET /todos/{id}`, `POST /todos`, `PUT /todos/{id}`, `DELETE /todos/{id}`）

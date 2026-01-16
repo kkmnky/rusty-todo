@@ -52,3 +52,52 @@ impl UserRepository for UserRepositoryImpl {
 fn hash_password(password: &str) -> AppResult<String> {
     bcrypt::hash(password, bcrypt::DEFAULT_COST).map_err(AppError::from)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::database::connect_database_with;
+    use kernel::model::user::event::CreateUser;
+    use shared::config::AppConfig;
+    use sqlx::Row;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[tokio::test]
+    async fn ユーザが作成される() {
+        let cfg = AppConfig::new().expect("DATABASE_* 環境変数が必要");
+        let pool = connect_database_with(&cfg);
+
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("timestamp")
+            .as_nanos();
+        let name = "Alice".to_string();
+        let email = format!("alice+{}@example.com", unique);
+        let repo = UserRepositoryImpl::new(pool.clone());
+        let event = CreateUser {
+            name: name.clone(),
+            email: email.clone(),
+            password: "password123".to_string(),
+        };
+
+        let user = repo.create(event).await.expect("作成が成功する");
+
+        assert_eq!(user.name, name);
+        assert_eq!(user.email, email);
+
+        let row = sqlx::query("SELECT name, email, password_hash FROM users WHERE id = $1")
+            .bind(user.id)
+            .fetch_one(pool.inner_ref())
+            .await
+            .expect("DBから取得できる");
+
+        let name: String = row.try_get("name").expect("name取得");
+        let email: String = row.try_get("email").expect("email取得");
+        let password_hash: String = row.try_get("password_hash").expect("password_hash取得");
+
+        assert_eq!(name, user.name);
+        assert_eq!(email, user.email);
+        assert_ne!(password_hash, "password123");
+        assert!(bcrypt::verify("password123", &password_hash).expect("hash検証"));
+    }
+}
