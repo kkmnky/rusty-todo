@@ -24,7 +24,8 @@
         - 作成成功し返却Userのname/emailが一致する
         - usersに1件作成されpassword_hashは平文と不一致
         - password_hashのbcrypt検証がtrue
-      - [ ] テスト(Adapter): ユーザ作成 異常系
+      - [x] テスト(Adapter): ユーザ作成 異常系
+        - 同一emailで2回作成するとSqlExecuteErrorになる
       - [x] テスト(API): `POST /api/v1/users` 正常系
       - [ ] テスト(API): `POST /api/v1/users` 異常系
     - ユーザ一覧取得:

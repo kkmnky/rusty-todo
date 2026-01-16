@@ -100,4 +100,33 @@ mod tests {
         assert_ne!(password_hash, "password123");
         assert!(bcrypt::verify("password123", &password_hash).expect("hash検証"));
     }
+
+    #[tokio::test]
+    async fn ユーザ作成は同一メールで失敗する() {
+        let cfg = AppConfig::new().expect("DATABASE_* 環境変数が必要");
+        let pool = connect_database_with(&cfg);
+
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("timestamp")
+            .as_nanos();
+        let email = format!("alice+{}@example.com", unique);
+        let repo = UserRepositoryImpl::new(pool.clone());
+
+        let first = CreateUser {
+            name: "Alice".to_string(),
+            email: email.clone(),
+            password: "password123".to_string(),
+        };
+        repo.create(first).await.expect("初回作成");
+
+        let second = CreateUser {
+            name: "Bob".to_string(),
+            email,
+            password: "password123".to_string(),
+        };
+        let err = repo.create(second).await.expect_err("重複は失敗");
+
+        assert!(matches!(err, AppError::SqlExecuteError(_)));
+    }
 }
