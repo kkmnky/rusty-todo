@@ -23,6 +23,7 @@ mod tests {
     use kernel::model::{id::UserId, user::User};
     use kernel::repository::user::{MockUserRepository, UserRepository};
     use registry::MockAppRegistryExt;
+    use shared::error::AppError;
     use std::sync::Arc;
 
     #[tokio::test]
@@ -52,5 +53,47 @@ mod tests {
         assert_eq!(status, StatusCode::CREATED);
         assert_eq!(body.name, "Alice");
         assert_eq!(body.email, "alice@example.com");
+    }
+
+    #[tokio::test]
+    async fn ユーザ追加はemail不正で失敗する() {
+        let registry = MockAppRegistryExt::new();
+        let registry: AppRegistry = Arc::new(registry);
+        let req = CreateUserRequest::new(
+            "Alice".to_string(),
+            "invalid-email".to_string(),
+            "password123".to_string(),
+        );
+
+        let err = register_user(State(registry), Json(req))
+            .await
+            .expect_err("バリデーションは失敗する");
+
+        assert!(matches!(err, AppError::ValidationError(_)));
+    }
+
+    #[tokio::test]
+    async fn ユーザ追加はリポジトリ失敗でエラーになる() {
+        let mut repo = MockUserRepository::new();
+        repo.expect_create().returning(|_event| {
+            Err(AppError::SqlExecuteError(sqlx::Error::RowNotFound))
+        });
+
+        let mut registry = MockAppRegistryExt::new();
+        let repo_arc: Arc<dyn UserRepository> = Arc::new(repo);
+        registry.expect_user_repository().return_const(repo_arc);
+
+        let registry: AppRegistry = Arc::new(registry);
+        let req = CreateUserRequest::new(
+            "Alice".to_string(),
+            "alice@example.com".to_string(),
+            "password123".to_string(),
+        );
+
+        let err = register_user(State(registry), Json(req))
+            .await
+            .expect_err("リポジトリ失敗はエラーになる");
+
+        assert!(matches!(err, AppError::SqlExecuteError(_)));
     }
 }

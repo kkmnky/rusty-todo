@@ -27,7 +27,9 @@
       - [x] テスト(Adapter): ユーザ作成 異常系
         - 同一emailで2回作成するとSqlExecuteErrorになる
       - [x] テスト(API): `POST /api/v1/users` 正常系
-      - [ ] テスト(API): `POST /api/v1/users` 異常系
+      - [x] テスト(API): `POST /api/v1/users` 異常系
+        - [x] email不正でValidationErrorになる
+        - [x] リポジトリ失敗でSqlExecuteErrorになる
     - ユーザ一覧取得:
       - [ ] テスト(Adapter): ユーザ一覧取得 正常系
       - [ ] テスト(Adapter): ユーザ一覧取得 異常系

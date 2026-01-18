@@ -6,7 +6,7 @@ use kernel::model::{
 };
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 pub struct UserResponse {
     pub id: UserId,
     pub name: String,

@@ -71,6 +71,7 @@ dependencies = [
  "registry",
  "serde",
  "shared",
+ "sqlx",
  "tokio",
 ]
 
