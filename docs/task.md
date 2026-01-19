@@ -34,9 +34,11 @@
       - [x] テスト(Adapter): ユーザ一覧取得 正常系
         - [x] 作成前後で件数が1件増える
         - [x] 作成ユーザが一覧に含まれname/emailが一致する
-      - [ ] テスト(Adapter): ユーザ一覧取得 異常系
-      - [ ] テスト(API): `GET /api/v1/users` 正常系
-      - [ ] テスト(API): `GET /api/v1/users` 異常系
+      - [x] テスト(Adapter): ユーザ一覧取得 異常系（対象なし）
+      - [x] テスト(API): `GET /api/v1/users` 正常系
+        - [x] 200とユーザ配列を返す
+        - [x] 返却配列にname/email/idが含まれる
+      - [x] テスト(API): `GET /api/v1/users` 異常系（対象なし）
     - ユーザ削除:
       - [ ] テスト(Adapter): ユーザ削除 正常系
       - [ ] テスト(Adapter): ユーザ削除 異常系

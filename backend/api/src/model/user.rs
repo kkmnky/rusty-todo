@@ -20,6 +20,11 @@ impl From<User> for UserResponse {
     }
 }
 
+#[derive(Debug, Serialize)]
+pub struct UsersResponse {
+    pub items: Vec<UserResponse>,
+}
+
 #[derive(Deserialize, Validate, new)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateUserRequest {

@@ -2,7 +2,7 @@ use axum::{Json, extract::State, http::StatusCode};
 use garde::Validate;
 use registry::AppRegistry;
 
-use crate::model::user::{CreateUserRequest, UserResponse};
+use crate::model::user::{CreateUserRequest, UserResponse, UsersResponse};
 use shared::error::AppResult;
 
 pub async fn register_user(
@@ -14,6 +14,20 @@ pub async fn register_user(
     let registered_user = registry.user_repository().create(req.into()).await?;
 
     Ok((StatusCode::CREATED, Json(registered_user.into())))
+}
+
+pub async fn list_users(
+    State(registry): State<AppRegistry>,
+) -> AppResult<(StatusCode, Json<UsersResponse>)> {
+    let items = registry
+        .user_repository()
+        .find_all()
+        .await?
+        .into_iter()
+        .map(UserResponse::from)
+        .collect();
+
+    Ok((StatusCode::OK, Json(UsersResponse { items })))
 }
 
 #[cfg(test)]
@@ -39,7 +53,9 @@ mod tests {
 
         let mut registry = MockAppRegistryExt::new();
         let repo_arc: Arc<dyn UserRepository> = Arc::new(repo);
-        registry.expect_user_repository().return_const(repo_arc.clone());
+        registry
+            .expect_user_repository()
+            .return_const(repo_arc.clone());
 
         let registry: AppRegistry = Arc::new(registry);
         let req = CreateUserRequest::new(
@@ -53,6 +69,42 @@ mod tests {
         assert_eq!(status, StatusCode::CREATED);
         assert_eq!(body.name, "Alice");
         assert_eq!(body.email, "alice@example.com");
+    }
+
+    #[tokio::test]
+    async fn ユーザ一覧は200とユーザ配列を返す() {
+        let mut repo = MockUserRepository::new();
+        repo.expect_find_all().returning(|| {
+            Ok(vec![
+                User {
+                    id: UserId::new(),
+                    name: "Alice".to_string(),
+                    email: "alice@example.com".to_string(),
+                },
+                User {
+                    id: UserId::new(),
+                    name: "Bob".to_string(),
+                    email: "bob@example.com".to_string(),
+                },
+            ])
+        });
+
+        let mut registry = MockAppRegistryExt::new();
+        let repo_arc: Arc<dyn UserRepository> = Arc::new(repo);
+        registry.expect_user_repository().return_const(repo_arc);
+
+        let registry: AppRegistry = Arc::new(registry);
+
+        let (status, Json(body)) = list_users(State(registry))
+            .await
+            .expect("正常系は成功を期待する");
+
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body.items.len(), 2);
+        assert_eq!(body.items[0].name, "Alice");
+        assert_eq!(body.items[0].email, "alice@example.com");
+        assert_eq!(body.items[1].name, "Bob");
+        assert_eq!(body.items[1].email, "bob@example.com");
     }
 
     #[tokio::test]
@@ -75,9 +127,8 @@ mod tests {
     #[tokio::test]
     async fn ユーザ追加はリポジトリ失敗でエラーになる() {
         let mut repo = MockUserRepository::new();
-        repo.expect_create().returning(|_event| {
-            Err(AppError::SqlExecuteError(sqlx::Error::RowNotFound))
-        });
+        repo.expect_create()
+            .returning(|_event| Err(AppError::SqlExecuteError(sqlx::Error::RowNotFound)));
 
         let mut registry = MockAppRegistryExt::new();
         let repo_arc: Arc<dyn UserRepository> = Arc::new(repo);
