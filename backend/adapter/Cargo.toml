@@ -12,6 +12,7 @@ sqlx = { workspace = true }
 async-trait = { workspace = true }
 derive-new = { workspace = true }
 bcrypt = { workspace = true }
+chrono = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true }

@@ -1,4 +1,4 @@
-use crate::database::ConnectionPool;
+use crate::database::{ConnectionPool, model::user::UserRow};
 use async_trait::async_trait;
 use derive_new::new;
 use kernel::{
@@ -22,7 +22,7 @@ impl UserRepository for UserRepositoryImpl {
         let hash_password = hash_password(&event.password)?;
 
         let res = sqlx::query!(
-            r#"
+            r#"--sql
                 INSERT INTO users (id, name, email, password_hash)
                 SELECT $1, $2, $3, $4
             "#,
@@ -46,6 +46,30 @@ impl UserRepository for UserRepositoryImpl {
             name: event.name,
             email: event.email,
         })
+    }
+
+    async fn find_all(&self) -> AppResult<Vec<User>> {
+        let users = sqlx::query_as!(
+            UserRow,
+            r#"--sql
+                SELECT
+                    id,
+                    name,
+                    email,
+                    created_at,
+                    updated_at
+                FROM users
+                ORDER BY created_at DESC
+            "#,
+        )
+        .fetch_all(self.db.inner_ref())
+        .await
+        .map_err(AppError::SqlExecuteError)?
+        .into_iter()
+        .filter_map(|row| User::try_from(row).ok())
+        .collect();
+
+        Ok(users)
     }
 }
 
@@ -128,5 +152,40 @@ mod tests {
         let err = repo.create(second).await.expect_err("重複は失敗");
 
         assert!(matches!(err, AppError::SqlExecuteError(_)));
+    }
+
+    #[tokio::test]
+    async fn ユーザ一覧は作成前後で1件増える() {
+        let cfg = AppConfig::new().expect("DATABASE_* 環境変数が必要");
+        let pool = connect_database_with(&cfg);
+        let repo = UserRepositoryImpl::new(pool.clone());
+
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("timestamp")
+            .as_nanos();
+        let name = "Alice".to_string();
+        let email = format!("alice+{}@example.com", unique);
+        let before = repo.find_all().await.expect("一覧取得");
+        let before_count = before.iter().filter(|user| user.email == email).count();
+        let event = CreateUser {
+            name: name.clone(),
+            email: email.clone(),
+            password: "password123".to_string(),
+        };
+
+        repo.create(event).await.expect("作成が成功する");
+
+        let after = repo.find_all().await.expect("一覧取得");
+        let after_count = after.iter().filter(|user| user.email == email).count();
+
+        assert_eq!(after_count, before_count + 1);
+
+        let created = after
+            .iter()
+            .find(|user| user.email == email)
+            .expect("作成ユーザが含まれる");
+        assert_eq!(created.name, name);
+        assert_eq!(created.email, email);
     }
 }

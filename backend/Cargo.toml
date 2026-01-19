@@ -46,6 +46,7 @@ uuid = { version = "1.19.0", features = ["v4", "serde"] }
 thiserror = "2.0.17"
 garde = { version = "0.22.1", features = ["derive", "email"] }
 bcrypt = "0.18.0"
+chrono = { version = "0.4.43", default-features = false, features = ["serde"] }
 
 [dependencies]
 adapter = { workspace = true }

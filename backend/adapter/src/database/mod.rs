@@ -1,6 +1,8 @@
 use shared::config::AppConfig;
 use sqlx::{PgPool, postgres::PgConnectOptions};
 
+pub mod model;
+
 #[derive(Clone)]
 pub struct ConnectionPool(PgPool);
 
