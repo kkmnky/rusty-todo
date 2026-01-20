@@ -4,7 +4,10 @@ use derive_new::new;
 use kernel::{
     model::{
         id::UserId,
-        user::{User, event::CreateUser},
+        user::{
+            User,
+            event::{CreateUser, DeleteUser},
+        },
     },
     repository::user::UserRepository,
 };
@@ -70,6 +73,26 @@ impl UserRepository for UserRepositoryImpl {
         .collect();
 
         Ok(users)
+    }
+
+    async fn delete(&self, event: DeleteUser) -> AppResult<()> {
+        let res = sqlx::query!(
+            r#"--sql
+                DELETE FROM users WHERE id = $1
+            "#,
+            event.id as _
+        )
+        .execute(self.db.inner_ref())
+        .await
+        .map_err(AppError::SqlExecuteError)?;
+
+        if res.rows_affected() == 0 {
+            return Err(AppError::EntityNotFoundError(
+                "No user has been deleted".into(),
+            ));
+        }
+
+        Ok(())
     }
 }
 
@@ -187,5 +210,38 @@ mod tests {
             .expect("作成ユーザが含まれる");
         assert_eq!(created.name, name);
         assert_eq!(created.email, email);
+    }
+
+    #[tokio::test]
+    async fn ユーザ削除で対象が消える() {
+        let cfg = AppConfig::new().expect("DATABASE_* 環境変数が必要");
+        let pool = connect_database_with(&cfg);
+        let repo = UserRepositoryImpl::new(pool.clone());
+
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("timestamp")
+            .as_nanos();
+        let name = "Alice".to_string();
+        let email = format!("alice+{}@example.com", unique);
+        let event = CreateUser {
+            name: name.clone(),
+            email: email.clone(),
+            password: "password123".to_string(),
+        };
+        let user = repo.create(event).await.expect("作成が成功する");
+
+        repo.delete(DeleteUser { id: user.id })
+            .await
+            .expect("削除が成功する");
+
+        let row = sqlx::query("SELECT COUNT(*) as count FROM users WHERE id = $1")
+            .bind(user.id)
+            .fetch_one(pool.inner_ref())
+            .await
+            .expect("DBから取得できる");
+        let count: i64 = row.try_get("count").expect("count取得");
+
+        assert_eq!(count, 0);
     }
 }

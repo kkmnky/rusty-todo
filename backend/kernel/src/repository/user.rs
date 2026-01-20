@@ -1,4 +1,7 @@
-use crate::model::user::{User, event::CreateUser};
+use crate::model::user::{
+    User,
+    event::{CreateUser, DeleteUser},
+};
 use async_trait::async_trait;
 use shared::error::AppResult;
 
@@ -7,4 +10,5 @@ use shared::error::AppResult;
 pub trait UserRepository: Send + Sync {
     async fn create(&self, event: CreateUser) -> AppResult<User>;
     async fn find_all(&self) -> AppResult<Vec<User>>;
+    async fn delete(&self, event: DeleteUser) -> AppResult<()>;
 }

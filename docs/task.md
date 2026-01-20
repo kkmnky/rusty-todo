@@ -41,6 +41,8 @@
       - [x] テスト(API): `GET /api/v1/users` 異常系（対象なし）
     - ユーザ削除:
       - [ ] テスト(Adapter): ユーザ削除 正常系
+        - 削除が成功する
+        - usersから対象ユーザが取得できない
       - [ ] テスト(Adapter): ユーザ削除 異常系
       - [ ] テスト(API): `DELETE /api/v1/users/:user_id` 正常系
       - [ ] テスト(API): `DELETE /api/v1/users/:user_id` 異常系
