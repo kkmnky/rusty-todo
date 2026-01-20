@@ -44,6 +44,7 @@
         - 削除が成功する
         - usersから対象ユーザが取得できない
       - [ ] テスト(Adapter): ユーザ削除 異常系
+        - 存在しないユーザIDで削除するとEntityNotFoundErrorになる
       - [ ] テスト(API): `DELETE /api/v1/users/:user_id` 正常系
       - [ ] テスト(API): `DELETE /api/v1/users/:user_id` 異常系
     - 自分情報取得:

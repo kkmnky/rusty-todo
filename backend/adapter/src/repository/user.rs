@@ -104,6 +104,7 @@ fn hash_password(password: &str) -> AppResult<String> {
 mod tests {
     use super::*;
     use crate::database::connect_database_with;
+    use kernel::model::id::UserId;
     use kernel::model::user::event::CreateUser;
     use shared::config::AppConfig;
     use sqlx::Row;
@@ -243,5 +244,19 @@ mod tests {
         let count: i64 = row.try_get("count").expect("count取得");
 
         assert_eq!(count, 0);
+    }
+
+    #[tokio::test]
+    async fn 存在しないユーザは削除できない() {
+        let cfg = AppConfig::new().expect("DATABASE_* 環境変数が必要");
+        let pool = connect_database_with(&cfg);
+        let repo = UserRepositoryImpl::new(pool);
+        let event = DeleteUser {
+            id: UserId::new(),
+        };
+
+        let err = repo.delete(event).await.expect_err("存在しないため失敗する");
+
+        assert!(matches!(err, AppError::EntityNotFoundError(_)));
     }
 }
