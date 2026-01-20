@@ -52,7 +52,9 @@
         - 不正なuser_idで400を返す
         - 存在しないuser_idで404を返す
     - 自分情報取得:
-      - [ ] テスト(Adapter): ユーザ取得（ID）正常系
+      - [x] テスト(Adapter): ユーザ取得（ID）正常系
+        - ID指定でユーザが取得できる
+        - 取得したname/email/idが一致する
       - [ ] テスト(Adapter): ユーザ取得（ID）異常系
       - [ ] テスト(API): `GET /api/v1/users/me` 正常系
       - [ ] テスト(API): `GET /api/v1/users/me` 異常系

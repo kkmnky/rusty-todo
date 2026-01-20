@@ -51,6 +51,30 @@ impl UserRepository for UserRepositoryImpl {
         })
     }
 
+    async fn find_by_id(&self, id: UserId) -> AppResult<Option<User>> {
+        let row = sqlx::query_as!(
+            UserRow,
+            r#"--sql
+                SELECT
+                    id,
+                    name,
+                    email,
+                    created_at,
+                    updated_at
+                FROM users WHERE id = $1
+            "#,
+            id as _,
+        )
+        .fetch_optional(self.db.inner_ref())
+        .await
+        .map_err(AppError::SqlExecuteError)?;
+
+        match row {
+            Some(row) => Ok(Some(User::try_from(row)?)),
+            None => Ok(None),
+        }
+    }
+
     async fn find_all(&self) -> AppResult<Vec<User>> {
         let users = sqlx::query_as!(
             UserRow,
@@ -251,12 +275,43 @@ mod tests {
         let cfg = AppConfig::new().expect("DATABASE_* 環境変数が必要");
         let pool = connect_database_with(&cfg);
         let repo = UserRepositoryImpl::new(pool);
-        let event = DeleteUser {
-            id: UserId::new(),
-        };
+        let event = DeleteUser { id: UserId::new() };
 
-        let err = repo.delete(event).await.expect_err("存在しないため失敗する");
+        let err = repo
+            .delete(event)
+            .await
+            .expect_err("存在しないため失敗する");
 
         assert!(matches!(err, AppError::EntityNotFoundError(_)));
+    }
+
+    #[tokio::test]
+    async fn ユーザ取得はid指定で取得できる() {
+        let cfg = AppConfig::new().expect("DATABASE_* 環境変数が必要");
+        let pool = connect_database_with(&cfg);
+        let repo = UserRepositoryImpl::new(pool.clone());
+
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("timestamp")
+            .as_nanos();
+        let name = "Alice".to_string();
+        let email = format!("alice+{}@example.com", unique);
+        let event = CreateUser {
+            name: name.clone(),
+            email: email.clone(),
+            password: "password123".to_string(),
+        };
+        let user = repo.create(event).await.expect("作成が成功する");
+
+        let found = repo
+            .find_by_id(user.id)
+            .await
+            .expect("取得が成功する")
+            .expect("ユーザが存在する");
+
+        assert_eq!(found.id, user.id);
+        assert_eq!(found.name, name);
+        assert_eq!(found.email, email);
     }
 }
