@@ -314,4 +314,18 @@ mod tests {
         assert_eq!(found.name, name);
         assert_eq!(found.email, email);
     }
+
+    #[tokio::test]
+    async fn ユーザ取得は存在しないidならnoneを返す() {
+        let cfg = AppConfig::new().expect("DATABASE_* 環境変数が必要");
+        let pool = connect_database_with(&cfg);
+        let repo = UserRepositoryImpl::new(pool);
+
+        let result = repo
+            .find_by_id(UserId::new())
+            .await
+            .expect("取得が成功する");
+
+        assert!(result.is_none());
+    }
 }
