@@ -37,8 +37,9 @@ pub async fn list_users(
 
 pub async fn delete_user(
     State(registry): State<AppRegistry>,
-    Path(user_id): Path<UserId>,
+    Path(user_id): Path<String>,
 ) -> AppResult<StatusCode> {
+    let user_id: UserId = user_id.parse()?;
     registry
         .user_repository()
         .delete(DeleteUser { id: user_id })
@@ -139,7 +140,7 @@ mod tests {
 
         let registry: AppRegistry = Arc::new(registry);
 
-        let status = delete_user(State(registry), Path(user_id))
+        let status = delete_user(State(registry), Path(user_id.to_string()))
             .await
             .expect("正常系は成功を期待する");
 
@@ -185,5 +186,38 @@ mod tests {
             .expect_err("リポジトリ失敗はエラーになる");
 
         assert!(matches!(err, AppError::SqlExecuteError(_)));
+    }
+
+    #[tokio::test]
+    async fn ユーザ削除は存在しないidで失敗する() {
+        let user_id = UserId::new();
+        let mut repo = MockUserRepository::new();
+        repo.expect_delete()
+            .withf(move |event| event.id == user_id)
+            .returning(|_event| Err(AppError::EntityNotFoundError("not found".into())));
+
+        let mut registry = MockAppRegistryExt::new();
+        let repo_arc: Arc<dyn UserRepository> = Arc::new(repo);
+        registry.expect_user_repository().return_const(repo_arc);
+
+        let registry: AppRegistry = Arc::new(registry);
+
+        let err = delete_user(State(registry), Path(user_id.to_string()))
+            .await
+            .expect_err("存在しないユーザは失敗する");
+
+        assert!(matches!(err, AppError::EntityNotFoundError(_)));
+    }
+
+    #[tokio::test]
+    async fn ユーザ削除は不正なidで失敗する() {
+        let registry = MockAppRegistryExt::new();
+        let registry: AppRegistry = Arc::new(registry);
+
+        let err = delete_user(State(registry), Path("invalid".to_string()))
+            .await
+            .expect_err("不正なIDは失敗する");
+
+        assert!(matches!(err, AppError::ConvertToUuidError(_)));
     }
 }

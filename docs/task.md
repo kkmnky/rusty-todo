@@ -40,15 +40,17 @@
         - [x] 返却配列にname/email/idが含まれる
       - [x] テスト(API): `GET /api/v1/users` 異常系（対象なし）
     - ユーザ削除:
-      - [ ] テスト(Adapter): ユーザ削除 正常系
+      - [x] テスト(Adapter): ユーザ削除 正常系
         - 削除が成功する
         - usersから対象ユーザが取得できない
-      - [ ] テスト(Adapter): ユーザ削除 異常系
+      - [x] テスト(Adapter): ユーザ削除 異常系
         - 存在しないユーザIDで削除するとEntityNotFoundErrorになる
       - [x] テスト(API): `DELETE /api/v1/users/:user_id` 正常系
         - 204を返す
         - レスポンスボディが空
-      - [ ] テスト(API): `DELETE /api/v1/users/:user_id` 異常系
+      - [x] テスト(API): `DELETE /api/v1/users/:user_id` 異常系
+        - 不正なuser_idで400を返す
+        - 存在しないuser_idで404を返す
     - 自分情報取得:
       - [ ] テスト(Adapter): ユーザ取得（ID）正常系
       - [ ] テスト(Adapter): ユーザ取得（ID）異常系
