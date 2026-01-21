@@ -83,4 +83,18 @@ mod tests {
         assert_eq!(credential.email, email);
         assert_eq!(credential.password_hash, password_hash);
     }
+
+    #[tokio::test]
+    async fn 認証情報は存在しないメールならnoneを返す() {
+        let cfg = AppConfig::new().expect("DATABASE_* 環境変数が必要");
+        let pool = connect_database_with(&cfg);
+        let auth_repo = AuthRepositoryImpl::new(pool);
+
+        let result = auth_repo
+            .find_by_email("not-found@example.com".to_string())
+            .await
+            .expect("取得が成功する");
+
+        assert!(result.is_none());
+    }
 }
