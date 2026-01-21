@@ -51,6 +51,36 @@
       - [x] テスト(API): `DELETE /api/v1/users/:user_id` 異常系
         - 不正なuser_idで400を返す
         - 存在しないuser_idで404を返す
+    - 認証:
+      - 方針:
+        - ログインはメール+パスワードで認証
+        - メールでユーザ取得 → パスワード検証
+        - JWTを発行し有効期限は1時間
+        - JWTはHS256 + JWT_SECRETで署名
+        - アクセストークンはRedisに保存（token -> user_id, TTL=1h）
+        - ログアウトはトークン削除
+        - 認証情報はAuthRepositoryで扱い、Userとは分離する
+        - ログインレスポンスはaccessToken/ expiresIn/ userIdを返す
+      - [x] テスト(Adapter): 認証情報取得（メール）正常系
+        - メール指定で認証情報が取得できる
+        - 取得したemail/idが一致する
+        - password_hashが取得できる
+      - [ ] テスト(Adapter): 認証情報取得（メール）異常系
+        - 存在しないメールならNoneを返す
+      - [ ] テスト(Adapter): トークン保存（Redis）正常系
+        - アクセストークンが保存される
+        - TTLが1時間で設定される
+      - [ ] テスト(Adapter): トークン削除（Redis）正常系
+        - アクセストークンが削除される
+      - [ ] テスト(API): `POST /api/v1/auth/login` 正常系
+        - アクセストークンを返す
+        - 期限情報を返す
+      - [ ] テスト(API): `POST /api/v1/auth/login` 異常系
+        - パスワード不一致で401を返す
+        - 存在しないメールで401を返す
+      - [ ] テスト(API): `POST /api/v1/auth/logout` 正常系
+        - アクセストークンが削除される
+      - [ ] テスト(API): `POST /api/v1/auth/logout` 異常系
     - 自分情報取得:
       - [x] テスト(Adapter): ユーザ取得（ID）正常系
         - ID指定でユーザが取得できる
@@ -64,14 +94,6 @@
       - [ ] テスト(Adapter): パスワード更新 異常系
       - [ ] テスト(API): `PUT /api/v1/users/me/password` 正常系
       - [ ] テスト(API): `PUT /api/v1/users/me/password` 異常系
-    - 認証:
-      - [ ] テスト(Adapter): ユーザ取得（メール）正常系
-      - [ ] テスト(Adapter): ユーザ取得（メール）異常系
-      - [ ] 追加(Adapter): ユーザ取得を実装後、パスワード一致（ハッシュ検証）のテストを追加
-      - [ ] テスト(API): `POST /api/v1/auth/login` 正常系
-      - [ ] テスト(API): `POST /api/v1/auth/login` 異常系
-      - [ ] テスト(API): `POST /api/v1/auth/logout` 正常系
-      - [ ] テスト(API): `POST /api/v1/auth/logout` 異常系
 8. [ ] ユーザ用マイグレーションを作成・適用する: users テーブル、必要ならインデックス
 9. [ ] ユーザ機能の動作確認をする: 統合テストまたは手動でサインアップ→ログイン→取得/更新/削除を確認
 10. [ ] Todo CRUD を実装する: ドメイン/ユースケース/リポジトリ/エンドポイント（`GET /todos`, `GET /todos/{id}`, `POST /todos`, `PUT /todos/{id}`, `DELETE /todos/{id}`）
