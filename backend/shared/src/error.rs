@@ -15,6 +15,10 @@ pub enum AppError {
     SqlExecuteError(#[source] sqlx::Error),
     #[error("No rows affected: {0}")]
     NoRowsAffectedError(String),
+    #[error("{0}")]
+    KeyValueStoreError(#[from] redis::RedisError),
+    #[error("{0}")]
+    ConversionEntityError(String),
 }
 
 impl IntoResponse for AppError {
@@ -26,6 +30,8 @@ impl IntoResponse for AppError {
             AppError::HashPasswordError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             AppError::SqlExecuteError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             AppError::NoRowsAffectedError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            AppError::KeyValueStoreError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            AppError::ConversionEntityError(_) => StatusCode::BAD_REQUEST,
         };
         status_code.into_response()
     }

@@ -1,4 +1,4 @@
-use shared::config::AppConfig;
+use shared::config::DatabaseConfig;
 use sqlx::{PgPool, postgres::PgConnectOptions};
 
 pub mod model;
@@ -16,15 +16,15 @@ impl ConnectionPool {
     }
 }
 
-pub fn connect_database_with(cfg: &AppConfig) -> ConnectionPool {
+pub fn connect_database_with(cfg: &DatabaseConfig) -> ConnectionPool {
     ConnectionPool(PgPool::connect_lazy_with(make_pg_connect_options(cfg)))
 }
 
-fn make_pg_connect_options(cfg: &AppConfig) -> PgConnectOptions {
+fn make_pg_connect_options(cfg: &DatabaseConfig) -> PgConnectOptions {
     PgConnectOptions::new()
-        .host(&cfg.database.host)
-        .port(cfg.database.port)
-        .username(&cfg.database.username)
-        .password(&cfg.database.password)
-        .database(&cfg.database.database)
+        .host(&cfg.host)
+        .port(cfg.port)
+        .username(&cfg.username)
+        .password(&cfg.password)
+        .database(&cfg.database)
 }

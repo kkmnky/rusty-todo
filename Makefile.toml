@@ -56,7 +56,7 @@ run_task = [
   { name = [
     "compose-up-db",
     "migrate",
-    # "compose-up-redis",
+    "compose-up-redis",
     # "compose-up-jaeger",
   ] },
 ]

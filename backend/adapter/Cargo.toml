@@ -13,6 +13,7 @@ async-trait = { workspace = true }
 derive-new = { workspace = true }
 bcrypt = { workspace = true }
 chrono = { workspace = true }
+redis = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true }

@@ -12,3 +12,4 @@ garde = { workspace = true }
 axum = { workspace = true }
 bcrypt = { workspace = true }
 sqlx = { workspace = true }
+redis = { workspace = true }

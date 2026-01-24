@@ -1,13 +1,26 @@
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use derive_new::new;
 use shared::error::{AppError, AppResult};
 
-use crate::database::{ConnectionPool, model::auth::UserCredentialRow};
-use kernel::{model::auth::UserCredential, repository::auth::AuthRepository};
+use crate::{
+    database::{
+        ConnectionPool,
+        model::auth::{UserCredentialRow, from},
+    },
+    redis::RedisClient,
+};
+use kernel::{
+    model::auth::{AccessToken, UserCredential, event::StoreToken},
+    repository::auth::AuthRepository,
+};
 
 #[derive(new)]
 pub struct AuthRepositoryImpl {
     db: ConnectionPool,
+    kv_store: Arc<RedisClient>,
+    ttl: u64,
 }
 
 #[async_trait]
@@ -33,14 +46,22 @@ impl AuthRepository for AuthRepositoryImpl {
             None => Ok(None),
         }
     }
+
+    async fn store_token(&self, event: StoreToken) -> AppResult<AccessToken> {
+        let (key, value) = from(event);
+        self.kv_store.set_ex(&key, &value, self.ttl).await?;
+        Ok(key.into())
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::database::connect_database_with;
+    use crate::database::model::auth::from;
+    use crate::redis::model::RedisValue;
     use crate::repository::user::UserRepositoryImpl;
-    use kernel::model::user::event::CreateUser;
+    use kernel::model::{auth::event::StoreToken, id::UserId, user::event::CreateUser};
     use kernel::repository::user::UserRepository;
     use shared::config::AppConfig;
     use sqlx::Row;
@@ -49,9 +70,10 @@ mod tests {
     #[tokio::test]
     async fn 認証情報はメール指定で取得できる() {
         let cfg = AppConfig::new().expect("DATABASE_* 環境変数が必要");
-        let pool = connect_database_with(&cfg);
+        let pool = connect_database_with(&cfg.database);
+        let kv_store = Arc::new(RedisClient::new(&cfg.redis).expect("Redis接続が成功する"));
         let user_repo = UserRepositoryImpl::new(pool.clone());
-        let auth_repo = AuthRepositoryImpl::new(pool.clone());
+        let auth_repo = AuthRepositoryImpl::new(pool.clone(), kv_store, cfg.auth.ttl);
 
         let unique = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -87,8 +109,9 @@ mod tests {
     #[tokio::test]
     async fn 認証情報は存在しないメールならnoneを返す() {
         let cfg = AppConfig::new().expect("DATABASE_* 環境変数が必要");
-        let pool = connect_database_with(&cfg);
-        let auth_repo = AuthRepositoryImpl::new(pool);
+        let pool = connect_database_with(&cfg.database);
+        let kv_store = Arc::new(RedisClient::new(&cfg.redis).expect("Redis接続が成功する"));
+        let auth_repo = AuthRepositoryImpl::new(pool.clone(), kv_store, cfg.auth.ttl);
 
         let result = auth_repo
             .find_by_email("not-found@example.com".to_string())
@@ -96,5 +119,40 @@ mod tests {
             .expect("取得が成功する");
 
         assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn アクセストークンは保存できる() {
+        let cfg = AppConfig::new().expect("DATABASE_* 環境変数が必要");
+        let pool = connect_database_with(&cfg.database);
+        let kv_store = Arc::new(RedisClient::new(&cfg.redis).expect("Redis接続が成功する"));
+        let auth_repo = AuthRepositoryImpl::new(pool, kv_store, cfg.auth.ttl);
+
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("timestamp")
+            .as_nanos();
+        let user_id = UserId::new();
+        let token = format!("test-token-{}", unique);
+        let event = StoreToken {
+            user_id,
+            access_token: token.clone(),
+        };
+
+        let stored = auth_repo.store_token(event).await.expect("保存が成功する");
+
+        assert_eq!(stored.0, token);
+
+        let (key, _value) = from(StoreToken {
+            user_id,
+            access_token: token.clone(),
+        });
+        let value = auth_repo.kv_store.get(&key).await.expect("token取得");
+        let ttl = auth_repo.kv_store.ttl(&key).await.expect("ttl取得");
+        let value = value.map(|value| value.inner());
+
+        assert_eq!(value, Some(user_id.to_string()));
+        assert!(ttl > 0);
+        assert!(ttl <= cfg.auth.ttl as i64);
     }
 }

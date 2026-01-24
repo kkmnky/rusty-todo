@@ -137,7 +137,7 @@ mod tests {
     #[tokio::test]
     async fn ユーザが作成される() {
         let cfg = AppConfig::new().expect("DATABASE_* 環境変数が必要");
-        let pool = connect_database_with(&cfg);
+        let pool = connect_database_with(&cfg.database);
 
         let unique = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -176,7 +176,7 @@ mod tests {
     #[tokio::test]
     async fn ユーザ作成は同一メールで失敗する() {
         let cfg = AppConfig::new().expect("DATABASE_* 環境変数が必要");
-        let pool = connect_database_with(&cfg);
+        let pool = connect_database_with(&cfg.database);
 
         let unique = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -205,7 +205,7 @@ mod tests {
     #[tokio::test]
     async fn ユーザ一覧は作成前後で1件増える() {
         let cfg = AppConfig::new().expect("DATABASE_* 環境変数が必要");
-        let pool = connect_database_with(&cfg);
+        let pool = connect_database_with(&cfg.database);
         let repo = UserRepositoryImpl::new(pool.clone());
 
         let unique = SystemTime::now()
@@ -240,7 +240,7 @@ mod tests {
     #[tokio::test]
     async fn ユーザ削除で対象が消える() {
         let cfg = AppConfig::new().expect("DATABASE_* 環境変数が必要");
-        let pool = connect_database_with(&cfg);
+        let pool = connect_database_with(&cfg.database);
         let repo = UserRepositoryImpl::new(pool.clone());
 
         let unique = SystemTime::now()
@@ -273,7 +273,7 @@ mod tests {
     #[tokio::test]
     async fn 存在しないユーザは削除できない() {
         let cfg = AppConfig::new().expect("DATABASE_* 環境変数が必要");
-        let pool = connect_database_with(&cfg);
+        let pool = connect_database_with(&cfg.database);
         let repo = UserRepositoryImpl::new(pool);
         let event = DeleteUser { id: UserId::new() };
 
@@ -288,7 +288,7 @@ mod tests {
     #[tokio::test]
     async fn ユーザ取得はid指定で取得できる() {
         let cfg = AppConfig::new().expect("DATABASE_* 環境変数が必要");
-        let pool = connect_database_with(&cfg);
+        let pool = connect_database_with(&cfg.database);
         let repo = UserRepositoryImpl::new(pool.clone());
 
         let unique = SystemTime::now()
@@ -318,7 +318,7 @@ mod tests {
     #[tokio::test]
     async fn ユーザ取得は存在しないidならnoneを返す() {
         let cfg = AppConfig::new().expect("DATABASE_* 環境変数が必要");
-        let pool = connect_database_with(&cfg);
+        let pool = connect_database_with(&cfg.database);
         let repo = UserRepositoryImpl::new(pool);
 
         let result = repo
