@@ -10,6 +10,8 @@ pub enum AppError {
     #[error("{0}")]
     HashPasswordError(#[from] bcrypt::BcryptError),
     #[error("{0}")]
+    Unauthorized(String),
+    #[error("{0}")]
     EntityNotFoundError(String),
     #[error("SQL execution failed.")]
     SqlExecuteError(#[source] sqlx::Error),
@@ -24,6 +26,7 @@ pub enum AppError {
 impl IntoResponse for AppError {
     fn into_response(self) -> axum::response::Response {
         let status_code = match self {
+            AppError::Unauthorized(_) => StatusCode::UNAUTHORIZED,
             AppError::EntityNotFoundError(_) => StatusCode::NOT_FOUND,
             AppError::ConvertToUuidError(_) => StatusCode::BAD_REQUEST,
             AppError::ValidationError(_) => StatusCode::BAD_REQUEST,

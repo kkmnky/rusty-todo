@@ -32,4 +32,10 @@ impl RedisClient {
         let ttl: i64 = conn.ttl(key.inner()).await?;
         Ok(ttl)
     }
+
+    pub async fn delete<T: RedisKey>(&self, key: &T) -> AppResult<i64> {
+        let mut conn = self.client.get_multiplexed_async_connection().await?;
+        let deleted_count: i64 = conn.del(key.inner()).await?;
+        Ok(deleted_count)
+    }
 }

@@ -67,10 +67,10 @@
         - password_hashが取得できる
       - [x] テスト(Adapter): 認証情報取得（メール）異常系
         - 存在しないメールならNoneを返す
-      - [ ] テスト(Adapter): トークン保存（Redis）正常系
+      - [x] テスト(Adapter): トークン保存（Redis）正常系
         - アクセストークンが保存される
         - TTLが1時間で設定される
-      - [ ] テスト(Adapter): トークン削除（Redis）正常系
+      - [x] テスト(Adapter): トークン削除（Redis）正常系
         - アクセストークンが削除される
       - [ ] テスト(API): `POST /api/v1/auth/login` 正常系
         - アクセストークンを返す

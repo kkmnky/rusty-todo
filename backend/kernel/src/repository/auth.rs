@@ -8,4 +8,6 @@ pub trait AuthRepository: Send + Sync {
     async fn find_by_email(&self, email: String) -> AppResult<Option<UserCredential>>;
 
     async fn store_token(&self, event: StoreToken) -> AppResult<AccessToken>;
+
+    async fn delete_token(&self, access_token: AccessToken) -> AppResult<()>;
 }

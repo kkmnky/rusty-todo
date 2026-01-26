@@ -9,4 +9,5 @@ pub struct UserCredential {
     pub password_hash: String,
 }
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct AccessToken(pub String);

@@ -5,11 +5,11 @@ use derive_new::new;
 use shared::error::{AppError, AppResult};
 
 use crate::{
-    database::{
-        ConnectionPool,
-        model::auth::{UserCredentialRow, from},
+    database::{ConnectionPool, model::auth::UserCredentialRow},
+    redis::{
+        RedisClient,
+        model::auth::{AuthorizationKey, from},
     },
-    redis::RedisClient,
 };
 use kernel::{
     model::auth::{AccessToken, UserCredential, event::StoreToken},
@@ -52,17 +52,27 @@ impl AuthRepository for AuthRepositoryImpl {
         self.kv_store.set_ex(&key, &value, self.ttl).await?;
         Ok(key.into())
     }
+
+    async fn delete_token(&self, access_token: AccessToken) -> AppResult<()> {
+        let key: AuthorizationKey = access_token.into();
+        let deleted_count = self.kv_store.delete(&key).await?;
+        if deleted_count == 0 {
+            return Err(AppError::Unauthorized("Invalid token".into()));
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::database::connect_database_with;
-    use crate::database::model::auth::from;
     use crate::redis::model::RedisValue;
     use crate::repository::user::UserRepositoryImpl;
-    use kernel::model::{auth::event::StoreToken, id::UserId, user::event::CreateUser};
-    use kernel::repository::user::UserRepository;
+    use kernel::{
+        model::{id::UserId, user::event::CreateUser},
+        repository::user::UserRepository,
+    };
     use shared::config::AppConfig;
     use sqlx::Row;
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -133,7 +143,7 @@ mod tests {
             .expect("timestamp")
             .as_nanos();
         let user_id = UserId::new();
-        let token = format!("test-token-{}", unique);
+        let token = AccessToken(format!("test-token-{}", unique));
         let event = StoreToken {
             user_id,
             access_token: token.clone(),
@@ -141,7 +151,7 @@ mod tests {
 
         let stored = auth_repo.store_token(event).await.expect("保存が成功する");
 
-        assert_eq!(stored.0, token);
+        assert_eq!(stored, token);
 
         let (key, _value) = from(StoreToken {
             user_id,
@@ -154,5 +164,65 @@ mod tests {
         assert_eq!(value, Some(user_id.to_string()));
         assert!(ttl > 0);
         assert!(ttl <= cfg.auth.ttl as i64);
+    }
+
+    #[tokio::test]
+    async fn アクセストークンは削除できる() {
+        let cfg = AppConfig::new().expect("DATABASE_* 環境変数が必要");
+        let pool = connect_database_with(&cfg.database);
+        let kv_store = Arc::new(RedisClient::new(&cfg.redis).expect("Redis接続が成功する"));
+        let auth_repo = AuthRepositoryImpl::new(pool, kv_store, cfg.auth.ttl);
+
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("timestamp")
+            .as_nanos();
+        let user_id = UserId::new();
+        let token = AccessToken(format!("test-token-{}", unique));
+        let event = StoreToken {
+            user_id,
+            access_token: token.clone(),
+        };
+
+        auth_repo.store_token(event).await.expect("保存が成功する");
+
+        let (key, _value) = from(StoreToken {
+            user_id,
+            access_token: token.clone(),
+        });
+        let stored = auth_repo.kv_store.get(&key).await.expect("token取得");
+        assert!(stored.is_some());
+
+        auth_repo
+            .delete_token(token.clone())
+            .await
+            .expect("削除が成功する");
+
+        let value = auth_repo.kv_store.get(&key).await.expect("token取得");
+        assert!(value.is_none());
+
+        let ttl = auth_repo.kv_store.ttl(&key).await.expect("ttl取得");
+        assert_eq!(ttl, -2);
+    }
+
+    #[tokio::test]
+    async fn 無効なアクセストークンは削除できない() {
+        let cfg = AppConfig::new().expect("DATABASE_* 環境変数が必要");
+        let pool = connect_database_with(&cfg.database);
+        let kv_store = Arc::new(RedisClient::new(&cfg.redis).expect("Redis接続が成功する"));
+        let auth_repo = AuthRepositoryImpl::new(pool, kv_store, cfg.auth.ttl);
+
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("timestamp")
+            .as_nanos();
+        let token = AccessToken(format!("test-token-{}", unique));
+
+        let err = auth_repo
+            .delete_token(token)
+            .await
+            .expect_err("無効トークンの削除は失敗する");
+
+        assert!(matches!(err, AppError::Unauthorized(_)));
     }
 }
