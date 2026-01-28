@@ -1,4 +1,4 @@
-use crate::model::auth::{AccessToken, UserCredential, event::StoreToken};
+use crate::model::auth::{AccessToken, UserCredential, mutations::StoreToken};
 use async_trait::async_trait;
 use shared::error::AppResult;
 

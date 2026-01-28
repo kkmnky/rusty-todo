@@ -17,6 +17,7 @@ pub struct AppRegistryImpl {
     pub health_check_repository: Arc<dyn HealthCheckRepository>,
     pub user_repository: Arc<dyn UserRepository>,
     pub auth_repository: Arc<dyn AuthRepository>,
+    pub auth_ttl: u64,
 }
 
 impl AppRegistryImpl {
@@ -33,6 +34,7 @@ impl AppRegistryImpl {
             health_check_repository,
             user_repository,
             auth_repository,
+            auth_ttl: app_config.auth.ttl,
         }
     }
 
@@ -47,6 +49,10 @@ impl AppRegistryImpl {
     pub fn auth_repository(&self) -> Arc<dyn AuthRepository> {
         self.auth_repository.clone()
     }
+
+    pub fn auth_ttl(&self) -> u64 {
+        self.auth_ttl
+    }
 }
 
 #[mockall::automock]
@@ -54,6 +60,7 @@ pub trait AppRegistryExt {
     fn health_check_repository(&self) -> Arc<dyn HealthCheckRepository>;
     fn user_repository(&self) -> Arc<dyn UserRepository>;
     fn auth_repository(&self) -> Arc<dyn AuthRepository>;
+    fn auth_ttl(&self) -> u64;
 }
 
 impl AppRegistryExt for AppRegistryImpl {
@@ -67,6 +74,10 @@ impl AppRegistryExt for AppRegistryImpl {
 
     fn auth_repository(&self) -> Arc<dyn AuthRepository> {
         self.auth_repository.clone()
+    }
+
+    fn auth_ttl(&self) -> u64 {
+        self.auth_ttl
     }
 }
 

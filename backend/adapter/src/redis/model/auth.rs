@@ -1,5 +1,5 @@
 use kernel::model::{
-    auth::{AccessToken, event::StoreToken},
+    auth::{AccessToken, mutations::StoreToken},
     id::UserId,
 };
 use shared::error::{AppError, AppResult};
@@ -34,7 +34,7 @@ impl RedisKey for AuthorizationKey {
     type Value = AuthorizationUserId;
 
     fn inner(&self) -> String {
-        self.0 .0.clone()
+        self.0.0.clone()
     }
 }
 

@@ -1,6 +1,8 @@
+use serde::Serialize;
+
 use crate::model::id::UserId;
 
-pub mod event;
+pub mod mutations;
 
 #[derive(Debug)]
 pub struct UserCredential {
@@ -9,5 +11,5 @@ pub struct UserCredential {
     pub password_hash: String,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct AccessToken(pub String);

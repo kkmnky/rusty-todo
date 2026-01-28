@@ -12,7 +12,7 @@ use crate::{
     },
 };
 use kernel::{
-    model::auth::{AccessToken, UserCredential, event::StoreToken},
+    model::auth::{AccessToken, UserCredential, mutations::StoreToken},
     repository::auth::AuthRepository,
 };
 

@@ -13,3 +13,4 @@ mockall = { workspace = true }
 serde = { workspace = true }
 sqlx = { workspace = true }
 uuid = { workspace = true }
+bcrypt = { workspace = true }

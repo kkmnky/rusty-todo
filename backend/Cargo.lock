@@ -66,6 +66,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "axum",
+ "bcrypt",
  "derive-new",
  "garde",
  "kernel",
@@ -1301,6 +1302,7 @@ name = "kernel"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "bcrypt",
  "mockall",
  "serde",
  "shared",

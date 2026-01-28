@@ -10,6 +10,7 @@ use kernel::{
         },
     },
     repository::user::UserRepository,
+    service::password,
 };
 use shared::error::{AppError, AppResult};
 
@@ -22,7 +23,7 @@ pub struct UserRepositoryImpl {
 impl UserRepository for UserRepositoryImpl {
     async fn create(&self, event: CreateUser) -> AppResult<User> {
         let user_id = UserId::new();
-        let hash_password = hash_password(&event.password)?;
+        let hash_password = password::hash(&event.password)?;
 
         let res = sqlx::query!(
             r#"--sql
@@ -120,10 +121,6 @@ impl UserRepository for UserRepositoryImpl {
     }
 }
 
-fn hash_password(password: &str) -> AppResult<String> {
-    bcrypt::hash(password, bcrypt::DEFAULT_COST).map_err(AppError::from)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -170,7 +167,10 @@ mod tests {
         assert_eq!(name, user.name);
         assert_eq!(email, user.email);
         assert_ne!(password_hash, "password123");
-        assert!(bcrypt::verify("password123", &password_hash).expect("hash検証"));
+        assert!(
+            password::verify("password123", &password_hash).expect("hash検証"),
+            "hash検証"
+        );
     }
 
     #[tokio::test]
