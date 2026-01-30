@@ -21,6 +21,8 @@ pub enum AppError {
     KeyValueStoreError(#[from] redis::RedisError),
     #[error("{0}")]
     ConversionEntityError(String),
+    #[error("{0}")]
+    JwtError(#[from] jsonwebtoken::errors::Error),
 }
 
 impl IntoResponse for AppError {
@@ -34,6 +36,7 @@ impl IntoResponse for AppError {
             AppError::SqlExecuteError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             AppError::NoRowsAffectedError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             AppError::KeyValueStoreError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            AppError::JwtError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             AppError::ConversionEntityError(_) => StatusCode::BAD_REQUEST,
         };
         status_code.into_response()

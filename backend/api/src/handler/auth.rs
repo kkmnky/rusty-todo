@@ -1,12 +1,8 @@
 use axum::{Json, extract::State, http::StatusCode};
 use garde::Validate;
-use kernel::{
-    model::{auth::AccessToken, id::UserId},
-    usecase::auth::login::{AccessTokenGenerator, LoginInput, LoginUsecase},
-};
+use kernel::usecase::auth::login::{LoginInput, LoginUsecase};
 use registry::AppRegistry;
 use shared::error::AppResult;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::model::auth::{AccessTokenResponse, LoginRequest};
 
@@ -18,8 +14,8 @@ pub async fn auth_login(
 
     let usecase = LoginUsecase::new(
         registry.auth_repository(),
-        std::sync::Arc::new(UuidTokenGenerator),
-        registry.auth_ttl(),
+        registry.jwt_issuer(),
+        registry.jwt_issuer().ttl(),
     );
 
     let result = usecase
@@ -39,18 +35,6 @@ pub async fn auth_login(
     ))
 }
 
-struct UuidTokenGenerator;
-
-impl AccessTokenGenerator for UuidTokenGenerator {
-    fn generate(&self, _user_id: UserId, _expires_in: u64) -> AppResult<AccessToken> {
-        let unique = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_nanos();
-        Ok(AccessToken(format!("token-{}", unique)))
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::auth_login;
@@ -60,7 +44,7 @@ mod tests {
         id::UserId,
     };
     use kernel::repository::auth::{AuthRepository, MockAuthRepository};
-    use kernel::service::password;
+    use kernel::service::{jwt::JwtIssuer, password};
     use registry::{AppRegistry, MockAppRegistryExt};
     use std::sync::Arc;
 
@@ -99,8 +83,11 @@ mod tests {
             .expect_auth_repository()
             .return_const(repo_arc.clone());
         registry
-            .expect_auth_ttl()
-            .return_const(60_u64 * 60 * 24);
+            .expect_jwt_issuer()
+            .return_const(Arc::new(JwtIssuer::new(
+                "test-secret".to_string(),
+                60_u64 * 60 * 24,
+            )));
 
         let registry: AppRegistry = Arc::new(registry);
         let req = LoginRequest::new(email, password);

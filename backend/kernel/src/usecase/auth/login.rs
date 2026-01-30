@@ -1,9 +1,12 @@
 use std::sync::Arc;
 
 use crate::{
-    model::{auth::AccessToken, auth::mutations::StoreToken, id::UserId},
+    model::{
+        auth::{AccessToken, mutations::StoreToken},
+        id::UserId,
+    },
     repository::auth::AuthRepository,
-    service::password,
+    service::{jwt::JwtIssuer, password},
 };
 use shared::error::{AppError, AppResult};
 
@@ -18,25 +21,21 @@ pub struct LoginOutput {
     pub user_id: UserId,
 }
 
-pub trait AccessTokenGenerator: Send + Sync {
-    fn generate(&self, user_id: UserId, expires_in: u64) -> AppResult<AccessToken>;
-}
-
 pub struct LoginUsecase {
     auth_repository: Arc<dyn AuthRepository>,
-    token_generator: Arc<dyn AccessTokenGenerator>,
+    jwt_issuer: Arc<JwtIssuer>,
     expires_in: u64,
 }
 
 impl LoginUsecase {
     pub fn new(
         auth_repository: Arc<dyn AuthRepository>,
-        token_generator: Arc<dyn AccessTokenGenerator>,
+        jwt_issuer: Arc<JwtIssuer>,
         expires_in: u64,
     ) -> Self {
         Self {
             auth_repository,
-            token_generator,
+            jwt_issuer,
             expires_in,
         }
     }
@@ -53,9 +52,7 @@ impl LoginUsecase {
             return Err(AppError::Unauthorized("Invalid credentials".into()));
         }
 
-        let access_token = self
-            .token_generator
-            .generate(credential.id, self.expires_in)?;
+        let access_token = self.jwt_issuer.issue_token(credential.id)?;
         let stored_token = self
             .auth_repository
             .store_token(StoreToken {

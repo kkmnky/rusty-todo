@@ -21,6 +21,7 @@ impl AppConfig {
         };
         let auth = AuthConfig {
             ttl: std::env::var("AUTH_TOKEN_TTL")?.parse::<u64>()?,
+            jwt_secret: std::env::var("AUTH_JWT_SECRET")?,
         };
         Ok(Self {
             database,
@@ -45,4 +46,5 @@ pub struct RedisConfig {
 
 pub struct AuthConfig {
     pub ttl: u64,
+    pub jwt_secret: String,
 }

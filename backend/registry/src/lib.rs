@@ -7,8 +7,9 @@ use adapter::{
         auth::AuthRepositoryImpl, health::HealthCheckRepositoryImpl, user::UserRepositoryImpl,
     },
 };
-use kernel::repository::{
-    auth::AuthRepository, health::HealthCheckRepository, user::UserRepository,
+use kernel::{
+    repository::{auth::AuthRepository, health::HealthCheckRepository, user::UserRepository},
+    service::jwt::JwtIssuer,
 };
 use shared::config::AppConfig;
 
@@ -17,7 +18,7 @@ pub struct AppRegistryImpl {
     pub health_check_repository: Arc<dyn HealthCheckRepository>,
     pub user_repository: Arc<dyn UserRepository>,
     pub auth_repository: Arc<dyn AuthRepository>,
-    pub auth_ttl: u64,
+    pub jwt_issuer: Arc<JwtIssuer>,
 }
 
 impl AppRegistryImpl {
@@ -29,12 +30,16 @@ impl AppRegistryImpl {
             kv_store,
             app_config.auth.ttl,
         ));
+        let jwt_issuer = Arc::new(JwtIssuer::new(
+            app_config.auth.jwt_secret,
+            app_config.auth.ttl,
+        ));
 
         Self {
             health_check_repository,
             user_repository,
             auth_repository,
-            auth_ttl: app_config.auth.ttl,
+            jwt_issuer,
         }
     }
 
@@ -50,8 +55,8 @@ impl AppRegistryImpl {
         self.auth_repository.clone()
     }
 
-    pub fn auth_ttl(&self) -> u64 {
-        self.auth_ttl
+    pub fn jwt_issuer(&self) -> Arc<JwtIssuer> {
+        self.jwt_issuer.clone()
     }
 }
 
@@ -60,7 +65,7 @@ pub trait AppRegistryExt {
     fn health_check_repository(&self) -> Arc<dyn HealthCheckRepository>;
     fn user_repository(&self) -> Arc<dyn UserRepository>;
     fn auth_repository(&self) -> Arc<dyn AuthRepository>;
-    fn auth_ttl(&self) -> u64;
+    fn jwt_issuer(&self) -> Arc<JwtIssuer>;
 }
 
 impl AppRegistryExt for AppRegistryImpl {
@@ -76,8 +81,8 @@ impl AppRegistryExt for AppRegistryImpl {
         self.auth_repository.clone()
     }
 
-    fn auth_ttl(&self) -> u64 {
-        self.auth_ttl
+    fn jwt_issuer(&self) -> Arc<JwtIssuer> {
+        self.jwt_issuer.clone()
     }
 }
 
