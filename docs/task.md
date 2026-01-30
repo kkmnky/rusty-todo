@@ -81,9 +81,9 @@
           - [x] sub が user_id と一致する
           - [x] 不正な署名で検証に失敗する
         - [x] JWT検証エラーの詳細をログに残す
-      - [ ] テスト(API): `POST /api/v1/auth/login` 異常系
-        - パスワード不一致で401を返す
-        - 存在しないメールで401を返す
+      - [x] テスト(API): `POST /api/v1/auth/login` 異常系
+        - [x] パスワード不一致で401を返す
+        - [x] 存在しないメールで401を返す
       - [ ] テスト(API): `POST /api/v1/auth/logout` 正常系
         - アクセストークンが削除される
       - [ ] テスト(API): `POST /api/v1/auth/logout` 異常系

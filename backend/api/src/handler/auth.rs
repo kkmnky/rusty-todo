@@ -42,6 +42,7 @@ mod tests {
     use kernel::repository::auth::{AuthRepository, MockAuthRepository};
     use kernel::service::{jwt::JwtIssuer, password};
     use registry::{AppRegistry, MockAppRegistryExt};
+    use shared::error::AppError;
     use std::sync::Arc;
 
     use crate::model::auth::LoginRequest;
@@ -95,5 +96,82 @@ mod tests {
         assert_eq!(body.access_token, stored_token);
         assert_eq!(body.expires_in, 60 * 60 * 24);
         assert_eq!(body.user_id, user_id);
+    }
+
+    #[tokio::test]
+    async fn パスワード不一致で401を返す() {
+        let user_id = UserId::new();
+        let email = "alice@example.com".to_string();
+        let password = "password123".to_string();
+        let password_hash = password::hash(&password).expect("hash作成");
+
+        let mut repo = MockAuthRepository::new();
+        let email_for_match = email.clone();
+        let email_for_return = email.clone();
+        let password_hash_for_return = password_hash.clone();
+        repo.expect_find_by_email()
+            .withf(move |value| value == &email_for_match)
+            .returning(move |_| {
+                Ok(Some(UserCredential {
+                    id: user_id,
+                    email: email_for_return.clone(),
+                    password_hash: password_hash_for_return.clone(),
+                }))
+            });
+
+        repo.expect_store_token().times(0);
+
+        let mut registry = MockAppRegistryExt::new();
+        let repo_arc: Arc<dyn AuthRepository> = Arc::new(repo);
+        registry
+            .expect_auth_repository()
+            .return_const(repo_arc.clone());
+        registry
+            .expect_jwt_issuer()
+            .return_const(Arc::new(JwtIssuer::new(
+                "test-secret".to_string(),
+                60_u64 * 60 * 24,
+            )));
+
+        let registry: AppRegistry = Arc::new(registry);
+        let req = LoginRequest::new(email, "wrong-password".to_string());
+
+        let err = auth_login(State(registry), Json(req))
+            .await
+            .expect_err("パスワード不一致で401を期待する");
+
+        assert!(matches!(err, AppError::Unauthorized(_)));
+    }
+
+    #[tokio::test]
+    async fn メールアドレスが存在しないで401を返す() {
+        let mut repo = MockAuthRepository::new();
+        repo.expect_find_by_email().returning(move |_| Ok(None));
+
+        repo.expect_store_token().times(0);
+
+        let mut registry = MockAppRegistryExt::new();
+        let repo_arc: Arc<dyn AuthRepository> = Arc::new(repo);
+        registry
+            .expect_auth_repository()
+            .return_const(repo_arc.clone());
+        registry
+            .expect_jwt_issuer()
+            .return_const(Arc::new(JwtIssuer::new(
+                "test-secret".to_string(),
+                60_u64 * 60 * 24,
+            )));
+
+        let registry: AppRegistry = Arc::new(registry);
+
+        let email = "alice@example.com".to_string();
+        let password = "password123".to_string();
+        let req = LoginRequest::new(email, password);
+
+        let err = auth_login(State(registry), Json(req))
+            .await
+            .expect_err("メールアドレスが存在しないで401を期待する");
+
+        assert!(matches!(err, AppError::Unauthorized(_)));
     }
 }
