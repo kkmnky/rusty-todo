@@ -16,12 +16,15 @@ struct Claims {
 
 #[derive(Debug, PartialEq)]
 pub struct VerifiedToken {
-    pub sub: String,
+    pub sub: UserId,
 }
 
-impl From<Claims> for VerifiedToken {
-    fn from(value: Claims) -> Self {
-        Self { sub: value.sub }
+impl TryFrom<Claims> for VerifiedToken {
+    type Error = AppError;
+
+    fn try_from(value: Claims) -> Result<Self, Self::Error> {
+        let sub: UserId = value.sub.parse()?;
+        Ok(Self { sub })
     }
 }
 
@@ -64,32 +67,30 @@ impl JwtIssuer {
         let claims = decode::<Claims>(token.0.as_str(), &key, &validation)
             .map(|data| data.claims)
             .map_err(|e| {
-                warn!(error = %e, "Invalid token");
+                warn!(error = %e, "JWT decode failed");
                 AppError::Unauthorized("Invalid token".into())
             })?;
 
-        if claims.sub.is_empty() {
-            warn!("Invalid token: sub is empty");
-            return Err(AppError::Unauthorized("Invalid token".into()));
-        }
-
-        Ok(VerifiedToken::from(claims))
+        VerifiedToken::try_from(claims).map_err(|e| {
+            warn!(error = %e, "JWT claims invalid");
+            AppError::Unauthorized("Invalid token".into())
+        })
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{JwtIssuer, VerifiedToken};
+    use super::{Claims, JwtIssuer, VerifiedToken};
     use crate::model::{auth::AccessToken, id::UserId};
+    use jsonwebtoken::{EncodingKey, Header, encode};
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
-    fn jwt生成と検証でsubとexpが正しい() {
+    fn jwt生成と検証でsubが正しい() {
         let user_id = UserId::new();
         let secret = "test-secret";
         let ttl = 60_u64 * 60;
-        let expected = VerifiedToken {
-            sub: user_id.to_string(),
-        };
+        let expected = VerifiedToken { sub: user_id };
 
         let issuer = JwtIssuer::new(secret.to_string(), ttl);
         let token: AccessToken = issuer.issue_token(user_id).expect("jwt生成");
@@ -108,6 +109,34 @@ mod tests {
         let err = wrong_issuer
             .verify_token(&token)
             .expect_err("不正署名は失敗する");
+        let _ = err;
+    }
+
+    #[test]
+    fn jwtはsubがuuidでない場合に失敗する() {
+        let ttl = 60_u64 * 60;
+        let secret = "test-secret".to_string();
+        let issuer = JwtIssuer::new(secret.clone(), ttl);
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("timestamp")
+            .as_secs() as i64;
+        let claims = Claims {
+            sub: "not-a-uuid".to_string(),
+            iat: now,
+            exp: now + ttl as i64,
+        };
+        let token = encode(
+            &Header::default(),
+            &claims,
+            &EncodingKey::from_secret(secret.as_bytes()),
+        )
+        .map(AccessToken)
+        .expect("jwt生成");
+
+        let err = issuer
+            .verify_token(&token)
+            .expect_err("sub不正は失敗する");
         let _ = err;
     }
 }

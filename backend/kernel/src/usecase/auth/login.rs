@@ -24,19 +24,13 @@ pub struct LoginOutput {
 pub struct LoginUsecase {
     auth_repository: Arc<dyn AuthRepository>,
     jwt_issuer: Arc<JwtIssuer>,
-    expires_in: u64,
 }
 
 impl LoginUsecase {
-    pub fn new(
-        auth_repository: Arc<dyn AuthRepository>,
-        jwt_issuer: Arc<JwtIssuer>,
-        expires_in: u64,
-    ) -> Self {
+    pub fn new(auth_repository: Arc<dyn AuthRepository>, jwt_issuer: Arc<JwtIssuer>) -> Self {
         Self {
             auth_repository,
             jwt_issuer,
-            expires_in,
         }
     }
 
@@ -63,7 +57,7 @@ impl LoginUsecase {
 
         Ok(LoginOutput {
             access_token: stored_token,
-            expires_in: self.expires_in,
+            expires_in: self.jwt_issuer.ttl(),
             user_id: credential.id,
         })
     }

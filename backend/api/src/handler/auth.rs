@@ -12,11 +12,7 @@ pub async fn auth_login(
 ) -> AppResult<(StatusCode, Json<AccessTokenResponse>)> {
     req.validate()?;
 
-    let usecase = LoginUsecase::new(
-        registry.auth_repository(),
-        registry.jwt_issuer(),
-        registry.jwt_issuer().ttl(),
-    );
+    let usecase = LoginUsecase::new(registry.auth_repository(), registry.jwt_issuer());
 
     let result = usecase
         .execute(LoginInput {
