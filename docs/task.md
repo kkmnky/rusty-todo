@@ -51,6 +51,14 @@
       - [x] テスト(API): `DELETE /api/v1/users/:user_id` 異常系
         - 不正なuser_idで400を返す
         - 存在しないuser_idで404を返す
+    - ユーザAPIの認証追加（JWT検証のみ）
+      - [x] テスト(API): `GET /api/v1/users` 認証必須
+        - [x] Authorizationヘッダがないと401を返す
+        - [x] 不正JWTで401を返す
+        - [x] Authorizationヘッダありで200を返す
+      - [x] テスト(API): `DELETE /api/v1/users/:user_id` 認証必須
+        - [x] Authorizationヘッダがないと401を返す
+        - [x] Authorizationヘッダありで204を返す
     - 認証:
       - 方針:
         - ログインはメール+パスワードで認証

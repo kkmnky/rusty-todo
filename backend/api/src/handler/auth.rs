@@ -53,7 +53,13 @@ pub async fn auth_logout(
     Ok(StatusCode::NO_CONTENT)
 }
 
-fn extract_bearer(headers: &HeaderMap) -> AppResult<AccessToken> {
+pub(crate) fn require_auth(registry: &AppRegistry, headers: &HeaderMap) -> AppResult<()> {
+    let access_token = extract_bearer(headers)?;
+    registry.jwt_issuer().verify_token(&access_token)?;
+    Ok(())
+}
+
+pub(crate) fn extract_bearer(headers: &HeaderMap) -> AppResult<AccessToken> {
     let value = headers
         .get(AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
