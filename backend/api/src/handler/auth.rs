@@ -1,8 +1,18 @@
-use axum::{Json, extract::State, http::StatusCode};
+use axum::{
+    Json,
+    extract::State,
+    http::{HeaderMap, StatusCode, header::AUTHORIZATION},
+};
 use garde::Validate;
-use kernel::usecase::auth::login::{LoginInput, LoginUsecase};
+use kernel::{
+    model::auth::AccessToken,
+    usecase::auth::{
+        login::{LoginInput, LoginUsecase},
+        logout::LogoutUsecase,
+    },
+};
 use registry::AppRegistry;
-use shared::error::AppResult;
+use shared::error::{AppError, AppResult};
 
 use crate::model::auth::{AccessTokenResponse, LoginRequest};
 
@@ -31,10 +41,43 @@ pub async fn auth_login(
     ))
 }
 
+pub async fn auth_logout(
+    State(registry): State<AppRegistry>,
+    headers: HeaderMap,
+) -> AppResult<StatusCode> {
+    let access_token = extract_bearer(&headers)?;
+    let usecase = LogoutUsecase::new(registry.auth_repository());
+
+    usecase.execute(access_token).await?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+fn extract_bearer(headers: &HeaderMap) -> AppResult<AccessToken> {
+    let value = headers
+        .get(AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .ok_or_else(|| AppError::Unauthorized("Missing bearer token".into()))?;
+
+    let mut parts = value.splitn(2, ' ');
+    let scheme = parts.next().unwrap_or("");
+    let token = parts.next().map(str::trim_start).filter(|v| !v.is_empty());
+
+    if !scheme.eq_ignore_ascii_case("bearer") || token.is_none() {
+        return Err(AppError::Unauthorized("Missing bearer token".into()));
+    }
+
+    Ok(AccessToken(token.unwrap().to_string()))
+}
+
 #[cfg(test)]
 mod tests {
-    use super::auth_login;
-    use axum::{Json, extract::State, http::StatusCode};
+    use super::{auth_login, auth_logout};
+    use axum::{
+        Json,
+        extract::State,
+        http::{HeaderMap, HeaderValue, StatusCode, header::AUTHORIZATION},
+    };
     use kernel::model::{
         auth::{AccessToken, UserCredential},
         id::UserId,
@@ -171,6 +214,86 @@ mod tests {
         let err = auth_login(State(registry), Json(req))
             .await
             .expect_err("メールアドレスが存在しないで401を期待する");
+
+        assert!(matches!(err, AppError::Unauthorized(_)));
+    }
+
+    #[tokio::test]
+    async fn ログアウトは204を返す() {
+        let token_value = "test-token".to_string();
+        let token = AccessToken(token_value.clone());
+
+        let mut repo = MockAuthRepository::new();
+        let token_for_match = token.clone();
+        repo.expect_delete_token()
+            .withf(move |value| value == &token_for_match)
+            .returning(|_| Ok(()));
+
+        let mut registry = MockAppRegistryExt::new();
+        let repo_arc: Arc<dyn AuthRepository> = Arc::new(repo);
+        registry
+            .expect_auth_repository()
+            .return_const(repo_arc.clone());
+
+        let registry: AppRegistry = Arc::new(registry);
+        let mut headers = HeaderMap::new();
+        let header_value =
+            HeaderValue::from_str(&format!("Bearer {}", token_value)).expect("header生成");
+        headers.insert(AUTHORIZATION, header_value);
+
+        let status = auth_logout(State(registry), headers)
+            .await
+            .expect("正常系は成功を期待する");
+
+        assert_eq!(status, StatusCode::NO_CONTENT);
+    }
+
+    #[tokio::test]
+    async fn authorizationヘッダがないと401を返す() {
+        let mut repo = MockAuthRepository::new();
+        repo.expect_delete_token().times(0);
+
+        let mut registry = MockAppRegistryExt::new();
+        let repo_arc: Arc<dyn AuthRepository> = Arc::new(repo);
+        registry
+            .expect_auth_repository()
+            .return_const(repo_arc.clone());
+
+        let registry: AppRegistry = Arc::new(registry);
+        let headers = HeaderMap::new();
+
+        let err = auth_logout(State(registry), headers)
+            .await
+            .expect_err("Authorizationヘッダなしは401を期待する");
+
+        assert!(matches!(err, AppError::Unauthorized(_)));
+    }
+
+    #[tokio::test]
+    async fn 無効なアクセストークンで401を返す() {
+        let token_value = "invalid-token".to_string();
+        let token = AccessToken(token_value.clone());
+
+        let mut repo = MockAuthRepository::new();
+        repo.expect_delete_token()
+            .withf(move |value| value == &token)
+            .returning(|_| Err(AppError::Unauthorized("Invalid token".into())));
+
+        let mut registry = MockAppRegistryExt::new();
+        let repo_arc: Arc<dyn AuthRepository> = Arc::new(repo);
+        registry
+            .expect_auth_repository()
+            .return_const(repo_arc.clone());
+
+        let registry: AppRegistry = Arc::new(registry);
+        let mut headers = HeaderMap::new();
+        let header_value =
+            HeaderValue::from_str(&format!("Bearer {}", token_value)).expect("header生成");
+        headers.insert(AUTHORIZATION, header_value);
+
+        let err = auth_logout(State(registry), headers)
+            .await
+            .expect_err("無効トークンは401を期待する");
 
         assert!(matches!(err, AppError::Unauthorized(_)));
     }
