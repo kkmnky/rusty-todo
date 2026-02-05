@@ -104,7 +104,10 @@
         - 取得したname/email/idが一致する
       - [x] テスト(Adapter): ユーザ取得（ID）異常系
         - 存在しないIDならNoneを返す
-      - [ ] テスト(API): `GET /api/v1/users/me` 正常系
+      - [x] テスト(API): `GET /api/v1/users/me` 正常系
+        - [x] AuthorizationヘッダのJWTが検証される
+        - [x] JWTのsubで取得したユーザのid/name/emailを返す
+        - [x] 200を返す
       - [ ] テスト(API): `GET /api/v1/users/me` 異常系
     - パスワード更新:
       - [ ] テスト(Adapter): パスワード更新 正常系

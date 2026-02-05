@@ -9,7 +9,7 @@ use registry::AppRegistry;
 
 use crate::handler::auth::require_auth;
 use crate::model::user::{CreateUserRequest, UserResponse, UsersResponse};
-use shared::error::AppResult;
+use shared::error::{AppError, AppResult};
 
 pub async fn register_user(
     State(registry): State<AppRegistry>,
@@ -55,6 +55,22 @@ pub async fn delete_user(
     Ok(StatusCode::NO_CONTENT)
 }
 
+pub async fn get_current_user(
+    State(registry): State<AppRegistry>,
+    headers: HeaderMap,
+) -> AppResult<(StatusCode, Json<UserResponse>)> {
+    let verified_token = require_auth(&registry, &headers)?;
+    let user_id = verified_token.sub;
+
+    let user = registry
+        .user_repository()
+        .find_by_id(user_id)
+        .await?
+        .ok_or_else(|| AppError::EntityNotFoundError("user not found".into()))?;
+
+    Ok((StatusCode::OK, Json(user.into())))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -62,11 +78,11 @@ mod tests {
         extract::{Path, State},
         http::{HeaderMap, HeaderValue, header::AUTHORIZATION},
     };
+    use kernel::repository::user::{MockUserRepository, UserRepository};
     use kernel::{
         model::{id::UserId, user::User},
         service::jwt::JwtIssuer,
     };
-    use kernel::repository::user::{MockUserRepository, UserRepository};
     use registry::MockAppRegistryExt;
     use shared::error::AppError;
     use std::sync::Arc;
@@ -80,6 +96,11 @@ mod tests {
 
     fn build_valid_auth_header(issuer: &JwtIssuer) -> HeaderMap {
         let token = issuer.issue_token(UserId::new()).expect("jwt生成");
+        build_auth_header(&token.0)
+    }
+
+    fn build_auth_header_for_user(issuer: &JwtIssuer, user_id: UserId) -> HeaderMap {
+        let token = issuer.issue_token(user_id).expect("jwt生成");
         build_auth_header(&token.0)
     }
 
@@ -300,9 +321,7 @@ mod tests {
 
         let registry: AppRegistry = Arc::new(registry);
         let wrong_issuer = JwtIssuer::new("wrong-secret".to_string(), 60_u64 * 60);
-        let wrong_token = wrong_issuer
-            .issue_token(UserId::new())
-            .expect("jwt生成");
+        let wrong_token = wrong_issuer.issue_token(UserId::new()).expect("jwt生成");
         let headers = build_auth_header(&wrong_token.0);
 
         let err = list_users(State(registry), headers)
@@ -330,5 +349,41 @@ mod tests {
             .expect_err("Authorizationヘッダなしは401を期待する");
 
         assert!(matches!(err, AppError::Unauthorized(_)));
+    }
+
+    #[tokio::test]
+    async fn 自分情報取得は200とユーザ情報を返す() {
+        let user_id = UserId::new();
+        let mut repo = MockUserRepository::new();
+        let user_id_for_match = user_id;
+        repo.expect_find_by_id()
+            .withf(move |value| *value == user_id_for_match)
+            .returning(move |_| {
+                Ok(Some(User {
+                    id: user_id,
+                    name: "Alice".to_string(),
+                    email: "alice@example.com".to_string(),
+                }))
+            });
+
+        let mut registry = MockAppRegistryExt::new();
+        let repo_arc: Arc<dyn UserRepository> = Arc::new(repo);
+        registry.expect_user_repository().return_const(repo_arc);
+        let jwt_issuer = Arc::new(JwtIssuer::new("test-secret".to_string(), 60_u64 * 60));
+        registry
+            .expect_jwt_issuer()
+            .return_const(jwt_issuer.clone());
+
+        let registry: AppRegistry = Arc::new(registry);
+        let headers = build_auth_header_for_user(&jwt_issuer, user_id);
+
+        let (status, Json(body)) = get_current_user(State(registry), headers)
+            .await
+            .expect("正常系は成功を期待する");
+
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body.id, user_id);
+        assert_eq!(body.name, "Alice");
+        assert_eq!(body.email, "alice@example.com");
     }
 }

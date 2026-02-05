@@ -6,6 +6,7 @@ use axum::{
 use garde::Validate;
 use kernel::{
     model::auth::AccessToken,
+    service::jwt::VerifiedToken,
     usecase::auth::{
         login::{LoginInput, LoginUsecase},
         logout::LogoutUsecase,
@@ -53,10 +54,13 @@ pub async fn auth_logout(
     Ok(StatusCode::NO_CONTENT)
 }
 
-pub(crate) fn require_auth(registry: &AppRegistry, headers: &HeaderMap) -> AppResult<()> {
+pub(crate) fn require_auth(
+    registry: &AppRegistry,
+    headers: &HeaderMap,
+) -> AppResult<VerifiedToken> {
     let access_token = extract_bearer(headers)?;
-    registry.jwt_issuer().verify_token(&access_token)?;
-    Ok(())
+    let verified_token = registry.jwt_issuer().verify_token(&access_token)?;
+    Ok(verified_token)
 }
 
 pub(crate) fn extract_bearer(headers: &HeaderMap) -> AppResult<AccessToken> {
