@@ -108,7 +108,10 @@
         - [x] AuthorizationヘッダのJWTが検証される
         - [x] JWTのsubで取得したユーザのid/name/emailを返す
         - [x] 200を返す
-      - [ ] テスト(API): `GET /api/v1/users/me` 異常系
+      - [x] テスト(API): `GET /api/v1/users/me` 異常系
+        - [x] Authorizationヘッダがないと401を返す
+        - [x] 不正JWTで401を返す
+        - [x] JWTは有効だがユーザが存在しない場合は404を返す
     - パスワード更新:
       - [ ] テスト(Adapter): パスワード更新 正常系
       - [ ] テスト(Adapter): パスワード更新 異常系

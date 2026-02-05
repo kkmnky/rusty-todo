@@ -386,4 +386,75 @@ mod tests {
         assert_eq!(body.name, "Alice");
         assert_eq!(body.email, "alice@example.com");
     }
+
+    #[tokio::test]
+    async fn 自分情報取得はauthorizationヘッダがないと401を返す() {
+        let mut repo = MockUserRepository::new();
+        repo.expect_find_by_id().times(0);
+
+        let mut registry = MockAppRegistryExt::new();
+        let repo_arc: Arc<dyn UserRepository> = Arc::new(repo);
+        registry.expect_user_repository().return_const(repo_arc);
+
+        let registry: AppRegistry = Arc::new(registry);
+        let headers = HeaderMap::new();
+
+        let err = get_current_user(State(registry), headers)
+            .await
+            .expect_err("Authorizationヘッダなしは401を期待する");
+
+        assert!(matches!(err, AppError::Unauthorized(_)));
+    }
+
+    #[tokio::test]
+    async fn 自分情報取得は不正jwtで401を返す() {
+        let mut repo = MockUserRepository::new();
+        repo.expect_find_by_id().times(0);
+
+        let mut registry = MockAppRegistryExt::new();
+        let repo_arc: Arc<dyn UserRepository> = Arc::new(repo);
+        registry.expect_user_repository().return_const(repo_arc);
+        let jwt_issuer = Arc::new(JwtIssuer::new("correct-secret".to_string(), 60_u64 * 60));
+        registry
+            .expect_jwt_issuer()
+            .return_const(jwt_issuer.clone());
+
+        let registry: AppRegistry = Arc::new(registry);
+        let wrong_issuer = JwtIssuer::new("wrong-secret".to_string(), 60_u64 * 60);
+        let wrong_token = wrong_issuer.issue_token(UserId::new()).expect("jwt生成");
+        let headers = build_auth_header(&wrong_token.0);
+
+        let err = get_current_user(State(registry), headers)
+            .await
+            .expect_err("不正JWTは401を期待する");
+
+        assert!(matches!(err, AppError::Unauthorized(_)));
+    }
+
+    #[tokio::test]
+    async fn 自分情報取得はユーザが存在しないと404を返す() {
+        let user_id = UserId::new();
+        let mut repo = MockUserRepository::new();
+        let user_id_for_match = user_id;
+        repo.expect_find_by_id()
+            .withf(move |value| *value == user_id_for_match)
+            .returning(|_| Ok(None));
+
+        let mut registry = MockAppRegistryExt::new();
+        let repo_arc: Arc<dyn UserRepository> = Arc::new(repo);
+        registry.expect_user_repository().return_const(repo_arc);
+        let jwt_issuer = Arc::new(JwtIssuer::new("test-secret".to_string(), 60_u64 * 60));
+        registry
+            .expect_jwt_issuer()
+            .return_const(jwt_issuer.clone());
+
+        let registry: AppRegistry = Arc::new(registry);
+        let headers = build_auth_header_for_user(&jwt_issuer, user_id);
+
+        let err = get_current_user(State(registry), headers)
+            .await
+            .expect_err("存在しないユーザは404を期待する");
+
+        assert!(matches!(err, AppError::EntityNotFoundError(_)));
+    }
 }
