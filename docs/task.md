@@ -116,10 +116,11 @@
       - [x] テスト(Adapter): パスワード更新 正常系
         - [x] password_hashが更新される
         - [x] 新パスワードの検証がtrueになる
-      - [ ] テスト(Adapter): パスワード更新 異常系
+      - [x] テスト(Adapter): パスワード更新 異常系
         - [x] 存在しないuser_idでEntityNotFoundErrorになる
         - [x] 現在パスワード不一致でUnauthorizedになる
-      - [ ] テスト(API): `PUT /api/v1/users/me/password` 正常系
+      - [x] テスト(API): `PUT /api/v1/users/me/password` 正常系
+        - [x] Authorizationヘッダ付きで204を返す
       - [ ] テスト(API): `PUT /api/v1/users/me/password` 異常系
 7.5. [ ] リファクタリング
    - [ ] rstest を導入しテストを段階的に移行する

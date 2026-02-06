@@ -4,11 +4,14 @@ use axum::{
     http::{HeaderMap, StatusCode},
 };
 use garde::Validate;
-use kernel::model::{id::UserId, user::event::DeleteUser};
+use kernel::model::{
+    id::UserId,
+    user::event::{DeleteUser, UpdatePassword},
+};
 use registry::AppRegistry;
 
 use crate::handler::auth::require_auth;
-use crate::model::user::{CreateUserRequest, UserResponse, UsersResponse};
+use crate::model::user::{ChangePasswordRequest, CreateUserRequest, UserResponse, UsersResponse};
 use shared::error::{AppError, AppResult};
 
 pub async fn register_user(
@@ -69,6 +72,25 @@ pub async fn get_current_user(
         .ok_or_else(|| AppError::EntityNotFoundError("user not found".into()))?;
 
     Ok((StatusCode::OK, Json(user.into())))
+}
+
+pub async fn change_password(
+    State(registry): State<AppRegistry>,
+    headers: HeaderMap,
+    Json(req): Json<ChangePasswordRequest>,
+) -> AppResult<StatusCode> {
+    req.validate()?;
+    let verified_token = require_auth(&registry, &headers)?;
+
+    let event = UpdatePassword {
+        id: verified_token.sub,
+        current_password: req.current_password,
+        new_password: req.new_password,
+    };
+
+    registry.user_repository().update_password(event).await?;
+
+    Ok(StatusCode::NO_CONTENT)
 }
 
 #[cfg(test)]
@@ -456,5 +478,38 @@ mod tests {
             .expect_err("存在しないユーザは404を期待する");
 
         assert!(matches!(err, AppError::EntityNotFoundError(_)));
+    }
+
+    #[tokio::test]
+    async fn パスワード更新は204を返す() {
+        let user_id = UserId::new();
+        let mut repo = MockUserRepository::new();
+        let user_id_for_match = user_id;
+        repo.expect_update_password()
+            .withf(move |event| {
+                event.id == user_id_for_match
+                    && event.current_password == "old-password"
+                    && event.new_password == "new-password"
+            })
+            .returning(|_| Ok(()));
+
+        let mut registry = MockAppRegistryExt::new();
+        let repo_arc: Arc<dyn UserRepository> = Arc::new(repo);
+        registry.expect_user_repository().return_const(repo_arc);
+        let jwt_issuer = Arc::new(JwtIssuer::new("test-secret".to_string(), 60_u64 * 60));
+        registry
+            .expect_jwt_issuer()
+            .return_const(jwt_issuer.clone());
+
+        let registry: AppRegistry = Arc::new(registry);
+        let headers = build_auth_header_for_user(&jwt_issuer, user_id);
+        let req =
+            ChangePasswordRequest::new("old-password".to_string(), "new-password".to_string());
+
+        let status = change_password(State(registry), headers, Json(req))
+            .await
+            .expect("正常系は成功を期待する");
+
+        assert_eq!(status, StatusCode::NO_CONTENT);
     }
 }

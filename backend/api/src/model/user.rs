@@ -27,6 +27,15 @@ pub struct UsersResponse {
 
 #[derive(Deserialize, Validate, new)]
 #[serde(rename_all = "camelCase")]
+pub struct ChangePasswordRequest {
+    #[garde(length(min = 1))]
+    pub current_password: String,
+    #[garde(length(min = 1))]
+    pub new_password: String,
+}
+
+#[derive(Deserialize, Validate, new)]
+#[serde(rename_all = "camelCase")]
 pub struct CreateUserRequest {
     #[garde(length(min = 1))]
     name: String,
