@@ -418,4 +418,57 @@ mod tests {
             "hash検証"
         );
     }
+
+    #[tokio::test]
+    async fn パスワード更新は存在しないユーザで失敗する() {
+        let cfg = AppConfig::new().expect("DATABASE_* 環境変数が必要");
+        let pool = connect_database_with(&cfg.database);
+        let repo = UserRepositoryImpl::new(pool);
+
+        let event = UpdatePassword {
+            id: UserId::new(),
+            current_password: "old-password".to_string(),
+            new_password: "new-password".to_string(),
+        };
+
+        let err = repo
+            .update_password(event)
+            .await
+            .expect_err("存在しないユーザは失敗する");
+
+        assert!(matches!(err, AppError::EntityNotFoundError(_)));
+    }
+
+    #[tokio::test]
+    async fn パスワード更新は現在パスワード不一致で失敗する() {
+        let cfg = AppConfig::new().expect("DATABASE_* 環境変数が必要");
+        let pool = connect_database_with(&cfg.database);
+        let repo = UserRepositoryImpl::new(pool.clone());
+
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("timestamp")
+            .as_nanos();
+        let name = "Alice".to_string();
+        let email = format!("alice+{}@example.com", unique);
+        let create_event = CreateUser {
+            name,
+            email,
+            password: "old-password".to_string(),
+        };
+        let user = repo.create(create_event).await.expect("作成が成功する");
+
+        let event = UpdatePassword {
+            id: user.id,
+            current_password: "wrong-password".to_string(),
+            new_password: "new-password".to_string(),
+        };
+
+        let err = repo
+            .update_password(event)
+            .await
+            .expect_err("不一致は失敗する");
+
+        assert!(matches!(err, AppError::Unauthorized(_)));
+    }
 }
