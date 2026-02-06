@@ -512,4 +512,109 @@ mod tests {
 
         assert_eq!(status, StatusCode::NO_CONTENT);
     }
+
+    #[tokio::test]
+    async fn パスワード更新はauthorizationヘッダがないと401を返す() {
+        let mut repo = MockUserRepository::new();
+        repo.expect_update_password().times(0);
+
+        let mut registry = MockAppRegistryExt::new();
+        let repo_arc: Arc<dyn UserRepository> = Arc::new(repo);
+        registry.expect_user_repository().return_const(repo_arc);
+
+        let registry: AppRegistry = Arc::new(registry);
+        let headers = HeaderMap::new();
+        let req =
+            ChangePasswordRequest::new("old-password".to_string(), "new-password".to_string());
+
+        let err = change_password(State(registry), headers, Json(req))
+            .await
+            .expect_err("Authorizationヘッダなしは401を期待する");
+
+        assert!(matches!(err, AppError::Unauthorized(_)));
+    }
+
+    #[tokio::test]
+    async fn パスワード更新は不正jwtで401を返す() {
+        let mut repo = MockUserRepository::new();
+        repo.expect_update_password().times(0);
+
+        let mut registry = MockAppRegistryExt::new();
+        let repo_arc: Arc<dyn UserRepository> = Arc::new(repo);
+        registry.expect_user_repository().return_const(repo_arc);
+        let jwt_issuer = Arc::new(JwtIssuer::new("correct-secret".to_string(), 60_u64 * 60));
+        registry
+            .expect_jwt_issuer()
+            .return_const(jwt_issuer.clone());
+
+        let registry: AppRegistry = Arc::new(registry);
+        let wrong_issuer = JwtIssuer::new("wrong-secret".to_string(), 60_u64 * 60);
+        let wrong_token = wrong_issuer.issue_token(UserId::new()).expect("jwt生成");
+        let headers = build_auth_header(&wrong_token.0);
+        let req =
+            ChangePasswordRequest::new("old-password".to_string(), "new-password".to_string());
+
+        let err = change_password(State(registry), headers, Json(req))
+            .await
+            .expect_err("不正JWTは401を期待する");
+
+        assert!(matches!(err, AppError::Unauthorized(_)));
+    }
+
+    #[tokio::test]
+    async fn パスワード更新は現在パスワード不一致で401を返す() {
+        let user_id = UserId::new();
+        let mut repo = MockUserRepository::new();
+        let user_id_for_match = user_id;
+        repo.expect_update_password()
+            .withf(move |event| {
+                event.id == user_id_for_match
+                    && event.current_password == "wrong-password"
+                    && event.new_password == "new-password"
+            })
+            .returning(|_| Err(AppError::Unauthorized("Invalid current password".into())));
+
+        let mut registry = MockAppRegistryExt::new();
+        let repo_arc: Arc<dyn UserRepository> = Arc::new(repo);
+        registry.expect_user_repository().return_const(repo_arc);
+        let jwt_issuer = Arc::new(JwtIssuer::new("test-secret".to_string(), 60_u64 * 60));
+        registry
+            .expect_jwt_issuer()
+            .return_const(jwt_issuer.clone());
+
+        let registry: AppRegistry = Arc::new(registry);
+        let headers = build_auth_header_for_user(&jwt_issuer, user_id);
+        let req =
+            ChangePasswordRequest::new("wrong-password".to_string(), "new-password".to_string());
+
+        let err = change_password(State(registry), headers, Json(req))
+            .await
+            .expect_err("不一致は401を期待する");
+
+        assert!(matches!(err, AppError::Unauthorized(_)));
+    }
+
+    #[tokio::test]
+    async fn パスワード更新はバリデーションエラーで400を返す() {
+        let mut repo = MockUserRepository::new();
+        repo.expect_update_password().times(0);
+
+        let mut registry = MockAppRegistryExt::new();
+        let repo_arc: Arc<dyn UserRepository> = Arc::new(repo);
+        registry.expect_user_repository().return_const(repo_arc);
+        let jwt_issuer = Arc::new(JwtIssuer::new("test-secret".to_string(), 60_u64 * 60));
+        registry
+            .expect_jwt_issuer()
+            .return_const(jwt_issuer.clone());
+
+        let registry: AppRegistry = Arc::new(registry);
+        let headers = build_valid_auth_header(&jwt_issuer);
+        let req = ChangePasswordRequest::new("".to_string(), "".to_string());
+
+        let err = change_password(State(registry), headers, Json(req))
+            .await
+            .expect_err("バリデーションは失敗する");
+
+        assert!(matches!(err, AppError::ValidationError(_)));
+    }
 }

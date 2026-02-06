@@ -121,7 +121,11 @@
         - [x] 現在パスワード不一致でUnauthorizedになる
       - [x] テスト(API): `PUT /api/v1/users/me/password` 正常系
         - [x] Authorizationヘッダ付きで204を返す
-      - [ ] テスト(API): `PUT /api/v1/users/me/password` 異常系
+      - [x] テスト(API): `PUT /api/v1/users/me/password` 異常系
+        - [x] Authorizationヘッダがないと401を返す
+        - [x] 不正JWTで401を返す
+        - [x] 現在パスワード不一致で401を返す
+        - [x] バリデーションエラーで400を返す
 7.5. [ ] リファクタリング
    - [ ] rstest を導入しテストを段階的に移行する
      - [ ] まずはユーザ/認証のテストから着手
