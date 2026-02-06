@@ -9,3 +9,9 @@ pub struct CreateUser {
 pub struct DeleteUser {
     pub id: UserId,
 }
+
+pub struct UpdatePassword {
+    pub id: UserId,
+    pub current_password: String,
+    pub new_password: String,
+}

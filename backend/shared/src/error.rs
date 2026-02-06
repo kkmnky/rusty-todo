@@ -15,6 +15,8 @@ pub enum AppError {
     EntityNotFoundError(String),
     #[error("SQL execution failed.")]
     SqlExecuteError(#[source] sqlx::Error),
+    #[error("Transaction failed.")]
+    TransactionError(#[source] sqlx::Error),
     #[error("No rows affected: {0}")]
     NoRowsAffectedError(String),
     #[error("{0}")]
@@ -34,6 +36,7 @@ impl IntoResponse for AppError {
             AppError::ValidationError(_) => StatusCode::BAD_REQUEST,
             AppError::HashPasswordError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             AppError::SqlExecuteError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            AppError::TransactionError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             AppError::NoRowsAffectedError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             AppError::KeyValueStoreError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             AppError::JwtError(_) => StatusCode::INTERNAL_SERVER_ERROR,

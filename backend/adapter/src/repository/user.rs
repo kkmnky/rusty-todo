@@ -6,7 +6,7 @@ use kernel::{
         id::UserId,
         user::{
             User,
-            event::{CreateUser, DeleteUser},
+            event::{CreateUser, DeleteUser, UpdatePassword},
         },
     },
     repository::user::UserRepository,
@@ -116,6 +116,43 @@ impl UserRepository for UserRepositoryImpl {
                 "No user has been deleted".into(),
             ));
         }
+
+        Ok(())
+    }
+
+    async fn update_password(&self, event: UpdatePassword) -> AppResult<()> {
+        let mut tx = self.db.begin().await?;
+        let row = sqlx::query!(
+            r#"--sql
+                SELECT password_hash FROM users WHERE id = $1
+            "#,
+            event.id as _
+        )
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(AppError::SqlExecuteError)?;
+
+        let current_password_hash = row
+            .ok_or_else(|| AppError::EntityNotFoundError("User not found".into()))?
+            .password_hash;
+
+        if !password::verify(&event.current_password, &current_password_hash)? {
+            return Err(AppError::Unauthorized("Invalid current password".into()));
+        }
+
+        let new_password_hash = password::hash(&event.new_password)?;
+        sqlx::query!(
+            r#"--sql
+                UPDATE users SET password_hash = $1 WHERE id = $2
+            "#,
+            new_password_hash,
+            event.id as _
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(AppError::SqlExecuteError)?;
+
+        tx.commit().await.map_err(AppError::TransactionError)?;
 
         Ok(())
     }
@@ -327,5 +364,58 @@ mod tests {
             .expect("取得が成功する");
 
         assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn パスワード更新でハッシュが更新される() {
+        let cfg = AppConfig::new().expect("DATABASE_* 環境変数が必要");
+        let pool = connect_database_with(&cfg.database);
+        let repo = UserRepositoryImpl::new(pool.clone());
+
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("timestamp")
+            .as_nanos();
+        let name = "Alice".to_string();
+        let email = format!("alice+{}@example.com", unique);
+        let create_event = CreateUser {
+            name,
+            email,
+            password: "old-password".to_string(),
+        };
+        let user = repo.create(create_event).await.expect("作成が成功する");
+
+        let row = sqlx::query("SELECT password_hash FROM users WHERE id = $1")
+            .bind(user.id)
+            .fetch_one(pool.inner_ref())
+            .await
+            .expect("DBから取得できる");
+        let old_password_hash: String = row.try_get("password_hash").expect("password_hash取得");
+
+        let update_event = UpdatePassword {
+            id: user.id,
+            current_password: "old-password".to_string(),
+            new_password: "new-password".to_string(),
+        };
+        repo.update_password(update_event)
+            .await
+            .expect("更新が成功する");
+
+        let row = sqlx::query("SELECT password_hash FROM users WHERE id = $1")
+            .bind(user.id)
+            .fetch_one(pool.inner_ref())
+            .await
+            .expect("DBから取得できる");
+        let new_password_hash: String = row.try_get("password_hash").expect("password_hash取得");
+
+        assert_ne!(old_password_hash, new_password_hash);
+        assert!(
+            password::verify("new-password", &new_password_hash).expect("hash検証"),
+            "hash検証"
+        );
+        assert!(
+            !password::verify("old-password", &new_password_hash).expect("hash検証"),
+            "hash検証"
+        );
     }
 }

@@ -113,7 +113,9 @@
         - [x] 不正JWTで401を返す
         - [x] JWTは有効だがユーザが存在しない場合は404を返す
     - パスワード更新:
-      - [ ] テスト(Adapter): パスワード更新 正常系
+      - [x] テスト(Adapter): パスワード更新 正常系
+        - [x] password_hashが更新される
+        - [x] 新パスワードの検証がtrueになる
       - [ ] テスト(Adapter): パスワード更新 異常系
       - [ ] テスト(API): `PUT /api/v1/users/me/password` 正常系
       - [ ] テスト(API): `PUT /api/v1/users/me/password` 異常系
