@@ -66,44 +66,44 @@ impl AuthRepository for AuthRepositoryImpl {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::database::connect_database_with;
+    use crate::database::ConnectionPool;
     use crate::redis::model::RedisValue;
-    use crate::repository::user::UserRepositoryImpl;
-    use kernel::{
-        model::{id::UserId, user::event::CreateUser},
-        repository::user::UserRepository,
+    use kernel::model::id::UserId;
+    use kernel::service::password;
+    use shared::config::RedisConfig;
+    use sqlx::PgPool;
+    use std::{
+        str::FromStr,
+        time::{SystemTime, UNIX_EPOCH},
     };
-    use shared::config::AppConfig;
-    use sqlx::Row;
-    use std::time::{SystemTime, UNIX_EPOCH};
 
-    #[tokio::test]
-    async fn 認証情報はメール指定で取得できる() {
-        let cfg = AppConfig::new().expect("DATABASE_* 環境変数が必要");
-        let pool = connect_database_with(&cfg.database);
-        let kv_store = Arc::new(RedisClient::new(&cfg.redis).expect("Redis接続が成功する"));
-        let user_repo = UserRepositoryImpl::new(pool.clone());
-        let auth_repo = AuthRepositoryImpl::new(pool.clone(), kv_store, cfg.auth.ttl);
+    fn redis_client() -> Arc<RedisClient> {
+        let host = std::env::var("REDIS_HOST").expect("REDIS_HOST");
+        let port = std::env::var("REDIS_PORT")
+            .expect("REDIS_PORT")
+            .parse()
+            .expect("REDIS_PORT");
+        let config = RedisConfig { host, port };
+        Arc::new(RedisClient::new(&config).expect("Redis接続が成功する"))
+    }
 
-        let unique = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("timestamp")
-            .as_nanos();
-        let name = "Alice".to_string();
-        let email = format!("alice+{}@example.com", unique);
-        let event = CreateUser {
-            name: name.clone(),
-            email: email.clone(),
-            password: "password123".to_string(),
-        };
-        let user = user_repo.create(event).await.expect("作成が成功する");
+    fn auth_ttl() -> u64 {
+        std::env::var("AUTH_TOKEN_TTL")
+            .ok()
+            .and_then(|value| value.parse().ok())
+            .unwrap_or(3600)
+    }
 
-        let row = sqlx::query("SELECT password_hash FROM users WHERE id = $1")
-            .bind(user.id)
-            .fetch_one(pool.inner_ref())
-            .await
-            .expect("DBから取得できる");
-        let password_hash: String = row.try_get("password_hash").expect("password_hash取得");
+    #[sqlx::test(fixtures("common"))]
+    async fn 認証情報はメール指定で取得できる(pool: PgPool) {
+        let pool = ConnectionPool::new(pool);
+        let kv_store = redis_client();
+        let auth_repo = AuthRepositoryImpl::new(pool.clone(), kv_store, auth_ttl());
+
+        let user_id =
+            UserId::from_str("75ef7d75-3b57-4f54-8e8e-fdb65738690c").expect("user_id取得");
+        let email = "common-fixtures@example.com".to_string();
+        let password = "password123".to_string();
 
         let credential = auth_repo
             .find_by_email(email.clone())
@@ -111,17 +111,16 @@ mod tests {
             .expect("取得が成功する")
             .expect("認証情報が存在する");
 
-        assert_eq!(credential.id, user.id);
+        assert_eq!(credential.id, user_id);
         assert_eq!(credential.email, email);
-        assert_eq!(credential.password_hash, password_hash);
+        assert!(password::verify(&password, &credential.password_hash).expect("hash検証"));
     }
 
-    #[tokio::test]
-    async fn 認証情報は存在しないメールならnoneを返す() {
-        let cfg = AppConfig::new().expect("DATABASE_* 環境変数が必要");
-        let pool = connect_database_with(&cfg.database);
-        let kv_store = Arc::new(RedisClient::new(&cfg.redis).expect("Redis接続が成功する"));
-        let auth_repo = AuthRepositoryImpl::new(pool.clone(), kv_store, cfg.auth.ttl);
+    #[sqlx::test]
+    async fn 認証情報は存在しないメールならnoneを返す(pool: PgPool) {
+        let pool = ConnectionPool::new(pool.clone());
+        let kv_store = redis_client();
+        let auth_repo = AuthRepositoryImpl::new(pool.clone(), kv_store, auth_ttl());
 
         let result = auth_repo
             .find_by_email("not-found@example.com".to_string())
@@ -131,12 +130,11 @@ mod tests {
         assert!(result.is_none());
     }
 
-    #[tokio::test]
-    async fn アクセストークンは保存できる() {
-        let cfg = AppConfig::new().expect("DATABASE_* 環境変数が必要");
-        let pool = connect_database_with(&cfg.database);
-        let kv_store = Arc::new(RedisClient::new(&cfg.redis).expect("Redis接続が成功する"));
-        let auth_repo = AuthRepositoryImpl::new(pool, kv_store, cfg.auth.ttl);
+    #[sqlx::test]
+    async fn アクセストークンは保存できる(pool: PgPool) {
+        let pool = ConnectionPool::new(pool.clone());
+        let kv_store = redis_client();
+        let auth_repo = AuthRepositoryImpl::new(pool, kv_store, auth_ttl());
 
         let unique = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -163,15 +161,14 @@ mod tests {
 
         assert_eq!(value, Some(user_id.to_string()));
         assert!(ttl > 0);
-        assert!(ttl <= cfg.auth.ttl as i64);
+        assert!(ttl <= auth_ttl() as i64);
     }
 
-    #[tokio::test]
-    async fn アクセストークンは削除できる() {
-        let cfg = AppConfig::new().expect("DATABASE_* 環境変数が必要");
-        let pool = connect_database_with(&cfg.database);
-        let kv_store = Arc::new(RedisClient::new(&cfg.redis).expect("Redis接続が成功する"));
-        let auth_repo = AuthRepositoryImpl::new(pool, kv_store, cfg.auth.ttl);
+    #[sqlx::test]
+    async fn アクセストークンは削除できる(pool: PgPool) {
+        let pool = ConnectionPool::new(pool.clone());
+        let kv_store = redis_client();
+        let auth_repo = AuthRepositoryImpl::new(pool, kv_store, auth_ttl());
 
         let unique = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -205,12 +202,11 @@ mod tests {
         assert_eq!(ttl, -2);
     }
 
-    #[tokio::test]
-    async fn 無効なアクセストークンは削除できない() {
-        let cfg = AppConfig::new().expect("DATABASE_* 環境変数が必要");
-        let pool = connect_database_with(&cfg.database);
-        let kv_store = Arc::new(RedisClient::new(&cfg.redis).expect("Redis接続が成功する"));
-        let auth_repo = AuthRepositoryImpl::new(pool, kv_store, cfg.auth.ttl);
+    #[sqlx::test]
+    async fn 無効なアクセストークンは削除できない(pool: PgPool) {
+        let pool = ConnectionPool::new(pool.clone());
+        let kv_store = redis_client();
+        let auth_repo = AuthRepositoryImpl::new(pool, kv_store, auth_ttl());
 
         let unique = SystemTime::now()
             .duration_since(UNIX_EPOCH)
