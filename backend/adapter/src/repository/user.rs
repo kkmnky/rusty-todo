@@ -161,24 +161,18 @@ impl UserRepository for UserRepositoryImpl {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::database::connect_database_with;
+    use crate::database::ConnectionPool;
     use kernel::model::id::UserId;
     use kernel::model::user::event::CreateUser;
-    use shared::config::AppConfig;
-    use sqlx::Row;
-    use std::time::{SystemTime, UNIX_EPOCH};
+    use sqlx::{PgPool, Row};
+    use std::str::FromStr;
 
-    #[tokio::test]
-    async fn ユーザが作成される() {
-        let cfg = AppConfig::new().expect("DATABASE_* 環境変数が必要");
-        let pool = connect_database_with(&cfg.database);
+    #[sqlx::test]
+    async fn ユーザが作成される(pool: PgPool) {
+        let pool = ConnectionPool::new(pool.clone());
 
-        let unique = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("timestamp")
-            .as_nanos();
         let name = "Alice".to_string();
-        let email = format!("alice+{}@example.com", unique);
+        let email = "alice@example.com".to_string();
         let repo = UserRepositoryImpl::new(pool.clone());
         let event = CreateUser {
             name: name.clone(),
@@ -210,47 +204,34 @@ mod tests {
         );
     }
 
-    #[tokio::test]
-    async fn ユーザ作成は同一メールで失敗する() {
-        let cfg = AppConfig::new().expect("DATABASE_* 環境変数が必要");
-        let pool = connect_database_with(&cfg.database);
+    #[sqlx::test(fixtures("common"))]
+    async fn ユーザ作成は同一メールで失敗する(pool: PgPool) {
+        let pool = ConnectionPool::new(pool.clone());
 
-        let unique = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("timestamp")
-            .as_nanos();
-        let email = format!("alice+{}@example.com", unique);
+        let name = "Bob".to_string();
+        let email = "common-fixtures@example.com".to_string();
+        let password = "password123".to_string();
         let repo = UserRepositoryImpl::new(pool.clone());
 
-        let first = CreateUser {
-            name: "Alice".to_string(),
-            email: email.clone(),
-            password: "password123".to_string(),
-        };
-        repo.create(first).await.expect("初回作成");
-
-        let second = CreateUser {
-            name: "Bob".to_string(),
-            email,
-            password: "password123".to_string(),
-        };
-        let err = repo.create(second).await.expect_err("重複は失敗");
+        let err = repo
+            .create(CreateUser {
+                name,
+                email,
+                password,
+            })
+            .await
+            .expect_err("重複は失敗");
 
         assert!(matches!(err, AppError::SqlExecuteError(_)));
     }
 
-    #[tokio::test]
-    async fn ユーザ一覧は作成前後で1件増える() {
-        let cfg = AppConfig::new().expect("DATABASE_* 環境変数が必要");
-        let pool = connect_database_with(&cfg.database);
+    #[sqlx::test]
+    async fn ユーザ一覧は作成前後で1件増える(pool: PgPool) {
+        let pool = ConnectionPool::new(pool.clone());
         let repo = UserRepositoryImpl::new(pool.clone());
 
-        let unique = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("timestamp")
-            .as_nanos();
         let name = "Alice".to_string();
-        let email = format!("alice+{}@example.com", unique);
+        let email = "alice@example.com".to_string();
         let before = repo.find_all().await.expect("一覧取得");
         let before_count = before.iter().filter(|user| user.email == email).count();
         let event = CreateUser {
@@ -274,31 +255,20 @@ mod tests {
         assert_eq!(created.email, email);
     }
 
-    #[tokio::test]
-    async fn ユーザ削除で対象が消える() {
-        let cfg = AppConfig::new().expect("DATABASE_* 環境変数が必要");
-        let pool = connect_database_with(&cfg.database);
+    #[sqlx::test(fixtures("common"))]
+    async fn ユーザ削除で対象が消える(pool: PgPool) {
+        let pool = ConnectionPool::new(pool.clone());
         let repo = UserRepositoryImpl::new(pool.clone());
 
-        let unique = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("timestamp")
-            .as_nanos();
-        let name = "Alice".to_string();
-        let email = format!("alice+{}@example.com", unique);
-        let event = CreateUser {
-            name: name.clone(),
-            email: email.clone(),
-            password: "password123".to_string(),
-        };
-        let user = repo.create(event).await.expect("作成が成功する");
+        let user_id =
+            UserId::from_str("75ef7d75-3b57-4f54-8e8e-fdb65738690c").expect("user_id取得");
 
-        repo.delete(DeleteUser { id: user.id })
+        repo.delete(DeleteUser { id: user_id })
             .await
             .expect("削除が成功する");
 
         let row = sqlx::query("SELECT COUNT(*) as count FROM users WHERE id = $1")
-            .bind(user.id)
+            .bind(user_id)
             .fetch_one(pool.inner_ref())
             .await
             .expect("DBから取得できる");
@@ -307,10 +277,9 @@ mod tests {
         assert_eq!(count, 0);
     }
 
-    #[tokio::test]
-    async fn 存在しないユーザは削除できない() {
-        let cfg = AppConfig::new().expect("DATABASE_* 環境変数が必要");
-        let pool = connect_database_with(&cfg.database);
+    #[sqlx::test]
+    async fn 存在しないユーザは削除できない(pool: PgPool) {
+        let pool = ConnectionPool::new(pool.clone());
         let repo = UserRepositoryImpl::new(pool);
         let event = DeleteUser { id: UserId::new() };
 
@@ -322,40 +291,30 @@ mod tests {
         assert!(matches!(err, AppError::EntityNotFoundError(_)));
     }
 
-    #[tokio::test]
-    async fn ユーザ取得はid指定で取得できる() {
-        let cfg = AppConfig::new().expect("DATABASE_* 環境変数が必要");
-        let pool = connect_database_with(&cfg.database);
+    #[sqlx::test(fixtures("common"))]
+    async fn ユーザ取得はid指定で取得できる(pool: PgPool) {
+        let pool = ConnectionPool::new(pool.clone());
         let repo = UserRepositoryImpl::new(pool.clone());
 
-        let unique = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("timestamp")
-            .as_nanos();
-        let name = "Alice".to_string();
-        let email = format!("alice+{}@example.com", unique);
-        let event = CreateUser {
-            name: name.clone(),
-            email: email.clone(),
-            password: "password123".to_string(),
-        };
-        let user = repo.create(event).await.expect("作成が成功する");
+        let user_id =
+            UserId::from_str("75ef7d75-3b57-4f54-8e8e-fdb65738690c").expect("user_id取得");
+        let name = "Fixtures".to_string();
+        let email = "common-fixtures@example.com".to_string();
 
         let found = repo
-            .find_by_id(user.id)
+            .find_by_id(user_id)
             .await
             .expect("取得が成功する")
             .expect("ユーザが存在する");
 
-        assert_eq!(found.id, user.id);
+        assert_eq!(found.id, user_id);
         assert_eq!(found.name, name);
         assert_eq!(found.email, email);
     }
 
-    #[tokio::test]
-    async fn ユーザ取得は存在しないidならnoneを返す() {
-        let cfg = AppConfig::new().expect("DATABASE_* 環境変数が必要");
-        let pool = connect_database_with(&cfg.database);
+    #[sqlx::test]
+    async fn ユーザ取得は存在しないidならnoneを返す(pool: PgPool) {
+        let pool = ConnectionPool::new(pool.clone());
         let repo = UserRepositoryImpl::new(pool);
 
         let result = repo
@@ -366,43 +325,32 @@ mod tests {
         assert!(result.is_none());
     }
 
-    #[tokio::test]
-    async fn パスワード更新でハッシュが更新される() {
-        let cfg = AppConfig::new().expect("DATABASE_* 環境変数が必要");
-        let pool = connect_database_with(&cfg.database);
+    #[sqlx::test(fixtures("common"))]
+    async fn パスワード更新でハッシュが更新される(pool: PgPool) {
+        let pool = ConnectionPool::new(pool.clone());
         let repo = UserRepositoryImpl::new(pool.clone());
 
-        let unique = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("timestamp")
-            .as_nanos();
-        let name = "Alice".to_string();
-        let email = format!("alice+{}@example.com", unique);
-        let create_event = CreateUser {
-            name,
-            email,
-            password: "old-password".to_string(),
-        };
-        let user = repo.create(create_event).await.expect("作成が成功する");
+        let user_id =
+            UserId::from_str("75ef7d75-3b57-4f54-8e8e-fdb65738690c").expect("user_id取得");
 
         let row = sqlx::query("SELECT password_hash FROM users WHERE id = $1")
-            .bind(user.id)
+            .bind(user_id)
             .fetch_one(pool.inner_ref())
             .await
             .expect("DBから取得できる");
         let old_password_hash: String = row.try_get("password_hash").expect("password_hash取得");
 
         let update_event = UpdatePassword {
-            id: user.id,
-            current_password: "old-password".to_string(),
-            new_password: "new-password".to_string(),
+            id: user_id,
+            current_password: "password123".to_string(),
+            new_password: "password456".to_string(),
         };
         repo.update_password(update_event)
             .await
             .expect("更新が成功する");
 
         let row = sqlx::query("SELECT password_hash FROM users WHERE id = $1")
-            .bind(user.id)
+            .bind(user_id)
             .fetch_one(pool.inner_ref())
             .await
             .expect("DBから取得できる");
@@ -410,25 +358,24 @@ mod tests {
 
         assert_ne!(old_password_hash, new_password_hash);
         assert!(
-            password::verify("new-password", &new_password_hash).expect("hash検証"),
+            password::verify("password456", &new_password_hash).expect("hash検証"),
             "hash検証"
         );
         assert!(
-            !password::verify("old-password", &new_password_hash).expect("hash検証"),
+            !password::verify("password123", &new_password_hash).expect("hash検証"),
             "hash検証"
         );
     }
 
-    #[tokio::test]
-    async fn パスワード更新は存在しないユーザで失敗する() {
-        let cfg = AppConfig::new().expect("DATABASE_* 環境変数が必要");
-        let pool = connect_database_with(&cfg.database);
+    #[sqlx::test]
+    async fn パスワード更新は存在しないユーザで失敗する(pool: PgPool) {
+        let pool = ConnectionPool::new(pool.clone());
         let repo = UserRepositoryImpl::new(pool);
 
         let event = UpdatePassword {
             id: UserId::new(),
-            current_password: "old-password".to_string(),
-            new_password: "new-password".to_string(),
+            current_password: "password123".to_string(),
+            new_password: "password456".to_string(),
         };
 
         let err = repo
@@ -439,27 +386,16 @@ mod tests {
         assert!(matches!(err, AppError::EntityNotFoundError(_)));
     }
 
-    #[tokio::test]
-    async fn パスワード更新は現在パスワード不一致で失敗する() {
-        let cfg = AppConfig::new().expect("DATABASE_* 環境変数が必要");
-        let pool = connect_database_with(&cfg.database);
+    #[sqlx::test(fixtures("common"))]
+    async fn パスワード更新は現在パスワード不一致で失敗する(pool: PgPool) {
+        let pool = ConnectionPool::new(pool.clone());
         let repo = UserRepositoryImpl::new(pool.clone());
 
-        let unique = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("timestamp")
-            .as_nanos();
-        let name = "Alice".to_string();
-        let email = format!("alice+{}@example.com", unique);
-        let create_event = CreateUser {
-            name,
-            email,
-            password: "old-password".to_string(),
-        };
-        let user = repo.create(create_event).await.expect("作成が成功する");
+        let user_id =
+            UserId::from_str("75ef7d75-3b57-4f54-8e8e-fdb65738690c").expect("user_id取得");
 
         let event = UpdatePassword {
-            id: user.id,
+            id: user_id,
             current_password: "wrong-password".to_string(),
             new_password: "new-password".to_string(),
         };

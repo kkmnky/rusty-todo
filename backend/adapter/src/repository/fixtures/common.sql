@@ -1,0 +1,2 @@
+INSERT INTO users(id, name, email, password_hash)
+VALUES ('75ef7d75-3b57-4f54-8e8e-fdb65738690c', 'Fixtures','common-fixtures@example.com','$2b$12$busePsuArd81KUB45zH1su2EC4Jz4PMGHvwQO5vpUMdfhC7JwmSJm');
