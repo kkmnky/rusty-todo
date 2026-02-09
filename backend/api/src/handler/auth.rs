@@ -86,8 +86,9 @@ mod tests {
     use axum::{
         Json,
         extract::State,
-        http::{HeaderMap, HeaderValue, StatusCode, header::AUTHORIZATION},
+        http::{HeaderMap, StatusCode},
     };
+    use crate::handler::test_support::build_auth_header;
     use kernel::model::{
         auth::{AccessToken, UserCredential},
         id::UserId,
@@ -95,13 +96,23 @@ mod tests {
     use kernel::repository::auth::{AuthRepository, MockAuthRepository};
     use kernel::service::{jwt::JwtIssuer, password};
     use registry::{AppRegistry, MockAppRegistryExt};
+    use rstest::{fixture, rstest};
     use shared::error::AppError;
     use std::sync::Arc;
 
     use crate::model::auth::LoginRequest;
 
+    #[fixture]
+    fn jwt_issuer() -> Arc<JwtIssuer> {
+        Arc::new(JwtIssuer::new(
+            "test-secret".to_string(),
+            60_u64 * 60 * 24,
+        ))
+    }
+
+    #[rstest]
     #[tokio::test]
-    async fn ログインは200とアクセストークンと期限を返す() {
+    async fn ログインは200とアクセストークンと期限を返す(jwt_issuer: Arc<JwtIssuer>) {
         let user_id = UserId::new();
         let email = "alice@example.com".to_string();
         let password = "password123".to_string();
@@ -134,10 +145,7 @@ mod tests {
             .return_const(repo_arc.clone());
         registry
             .expect_jwt_issuer()
-            .return_const(Arc::new(JwtIssuer::new(
-                "test-secret".to_string(),
-                60_u64 * 60 * 24,
-            )));
+            .return_const(jwt_issuer.clone());
 
         let registry: AppRegistry = Arc::new(registry);
         let req = LoginRequest::new(email, password);
@@ -151,8 +159,9 @@ mod tests {
         assert_eq!(body.user_id, user_id);
     }
 
+    #[rstest]
     #[tokio::test]
-    async fn パスワード不一致で401を返す() {
+    async fn パスワード不一致で401を返す(jwt_issuer: Arc<JwtIssuer>) {
         let user_id = UserId::new();
         let email = "alice@example.com".to_string();
         let password = "password123".to_string();
@@ -181,10 +190,7 @@ mod tests {
             .return_const(repo_arc.clone());
         registry
             .expect_jwt_issuer()
-            .return_const(Arc::new(JwtIssuer::new(
-                "test-secret".to_string(),
-                60_u64 * 60 * 24,
-            )));
+            .return_const(jwt_issuer.clone());
 
         let registry: AppRegistry = Arc::new(registry);
         let req = LoginRequest::new(email, "wrong-password".to_string());
@@ -196,8 +202,9 @@ mod tests {
         assert!(matches!(err, AppError::Unauthorized(_)));
     }
 
+    #[rstest]
     #[tokio::test]
-    async fn メールアドレスが存在しないで401を返す() {
+    async fn メールアドレスが存在しないで401を返す(jwt_issuer: Arc<JwtIssuer>) {
         let mut repo = MockAuthRepository::new();
         repo.expect_find_by_email().returning(move |_| Ok(None));
 
@@ -210,10 +217,7 @@ mod tests {
             .return_const(repo_arc.clone());
         registry
             .expect_jwt_issuer()
-            .return_const(Arc::new(JwtIssuer::new(
-                "test-secret".to_string(),
-                60_u64 * 60 * 24,
-            )));
+            .return_const(jwt_issuer.clone());
 
         let registry: AppRegistry = Arc::new(registry);
 
@@ -228,6 +232,7 @@ mod tests {
         assert!(matches!(err, AppError::Unauthorized(_)));
     }
 
+    #[rstest]
     #[tokio::test]
     async fn ログアウトは204を返す() {
         let token_value = "test-token".to_string();
@@ -246,10 +251,7 @@ mod tests {
             .return_const(repo_arc.clone());
 
         let registry: AppRegistry = Arc::new(registry);
-        let mut headers = HeaderMap::new();
-        let header_value =
-            HeaderValue::from_str(&format!("Bearer {}", token_value)).expect("header生成");
-        headers.insert(AUTHORIZATION, header_value);
+        let headers = build_auth_header(&token_value);
 
         let status = auth_logout(State(registry), headers)
             .await
@@ -258,6 +260,7 @@ mod tests {
         assert_eq!(status, StatusCode::NO_CONTENT);
     }
 
+    #[rstest]
     #[tokio::test]
     async fn authorizationヘッダがないと401を返す() {
         let mut repo = MockAuthRepository::new();
@@ -279,6 +282,7 @@ mod tests {
         assert!(matches!(err, AppError::Unauthorized(_)));
     }
 
+    #[rstest]
     #[tokio::test]
     async fn 無効なアクセストークンで401を返す() {
         let token_value = "invalid-token".to_string();
@@ -296,10 +300,7 @@ mod tests {
             .return_const(repo_arc.clone());
 
         let registry: AppRegistry = Arc::new(registry);
-        let mut headers = HeaderMap::new();
-        let header_value =
-            HeaderValue::from_str(&format!("Bearer {}", token_value)).expect("header生成");
-        headers.insert(AUTHORIZATION, header_value);
+        let headers = build_auth_header(&token_value);
 
         let err = auth_logout(State(registry), headers)
             .await

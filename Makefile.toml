@@ -165,7 +165,7 @@ args = [
   "--workspace",
   "--status-level",
   "all",
-  "--test-threads=1",
+  "--test-threads=4",
 ]
 
 [tasks."bk:clippy-ci"]

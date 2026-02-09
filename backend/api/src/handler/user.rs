@@ -98,7 +98,10 @@ mod tests {
     use super::*;
     use axum::{
         extract::{Path, State},
-        http::{HeaderMap, HeaderValue, header::AUTHORIZATION},
+        http::HeaderMap,
+    };
+    use crate::handler::test_support::{
+        build_auth_header, build_auth_header_for_user, build_valid_auth_header,
     };
     use kernel::repository::user::{MockUserRepository, UserRepository};
     use kernel::{
@@ -106,26 +109,16 @@ mod tests {
         service::jwt::JwtIssuer,
     };
     use registry::MockAppRegistryExt;
+    use rstest::{fixture, rstest};
     use shared::error::AppError;
     use std::sync::Arc;
 
-    fn build_auth_header(token: &str) -> HeaderMap {
-        let mut headers = HeaderMap::new();
-        let value = HeaderValue::from_str(&format!("Bearer {}", token)).expect("header生成");
-        headers.insert(AUTHORIZATION, value);
-        headers
+    #[fixture]
+    fn jwt_issuer() -> Arc<JwtIssuer> {
+        Arc::new(JwtIssuer::new("test-secret".to_string(), 60_u64 * 60))
     }
 
-    fn build_valid_auth_header(issuer: &JwtIssuer) -> HeaderMap {
-        let token = issuer.issue_token(UserId::new()).expect("jwt生成");
-        build_auth_header(&token.0)
-    }
-
-    fn build_auth_header_for_user(issuer: &JwtIssuer, user_id: UserId) -> HeaderMap {
-        let token = issuer.issue_token(user_id).expect("jwt生成");
-        build_auth_header(&token.0)
-    }
-
+    #[rstest]
     #[tokio::test]
     async fn ユーザ追加は201と必要項目を返す() {
         let mut repo = MockUserRepository::new();
@@ -157,8 +150,9 @@ mod tests {
         assert_eq!(body.email, "alice@example.com");
     }
 
+    #[rstest]
     #[tokio::test]
-    async fn ユーザ一覧は200とユーザ配列を返す() {
+    async fn ユーザ一覧は200とユーザ配列を返す(jwt_issuer: Arc<JwtIssuer>) {
         let mut repo = MockUserRepository::new();
         repo.expect_find_all().returning(|| {
             Ok(vec![
@@ -178,7 +172,6 @@ mod tests {
         let mut registry = MockAppRegistryExt::new();
         let repo_arc: Arc<dyn UserRepository> = Arc::new(repo);
         registry.expect_user_repository().return_const(repo_arc);
-        let jwt_issuer = Arc::new(JwtIssuer::new("test-secret".to_string(), 60_u64 * 60));
         registry
             .expect_jwt_issuer()
             .return_const(jwt_issuer.clone());
@@ -198,8 +191,9 @@ mod tests {
         assert_eq!(body.items[1].email, "bob@example.com");
     }
 
+    #[rstest]
     #[tokio::test]
-    async fn ユーザ削除は204を返す() {
+    async fn ユーザ削除は204を返す(jwt_issuer: Arc<JwtIssuer>) {
         let user_id = UserId::new();
         let mut repo = MockUserRepository::new();
         repo.expect_delete()
@@ -209,7 +203,6 @@ mod tests {
         let mut registry = MockAppRegistryExt::new();
         let repo_arc: Arc<dyn UserRepository> = Arc::new(repo);
         registry.expect_user_repository().return_const(repo_arc);
-        let jwt_issuer = Arc::new(JwtIssuer::new("test-secret".to_string(), 60_u64 * 60));
         registry
             .expect_jwt_issuer()
             .return_const(jwt_issuer.clone());
@@ -224,6 +217,7 @@ mod tests {
         assert_eq!(status, StatusCode::NO_CONTENT);
     }
 
+    #[rstest]
     #[tokio::test]
     async fn ユーザ追加はemail不正で失敗する() {
         let registry = MockAppRegistryExt::new();
@@ -241,6 +235,7 @@ mod tests {
         assert!(matches!(err, AppError::ValidationError(_)));
     }
 
+    #[rstest]
     #[tokio::test]
     async fn ユーザ追加はリポジトリ失敗でエラーになる() {
         let mut repo = MockUserRepository::new();
@@ -265,8 +260,9 @@ mod tests {
         assert!(matches!(err, AppError::SqlExecuteError(_)));
     }
 
+    #[rstest]
     #[tokio::test]
-    async fn ユーザ削除は存在しないidで失敗する() {
+    async fn ユーザ削除は存在しないidで失敗する(jwt_issuer: Arc<JwtIssuer>) {
         let user_id = UserId::new();
         let mut repo = MockUserRepository::new();
         repo.expect_delete()
@@ -276,7 +272,6 @@ mod tests {
         let mut registry = MockAppRegistryExt::new();
         let repo_arc: Arc<dyn UserRepository> = Arc::new(repo);
         registry.expect_user_repository().return_const(repo_arc);
-        let jwt_issuer = Arc::new(JwtIssuer::new("test-secret".to_string(), 60_u64 * 60));
         registry
             .expect_jwt_issuer()
             .return_const(jwt_issuer.clone());
@@ -291,10 +286,10 @@ mod tests {
         assert!(matches!(err, AppError::EntityNotFoundError(_)));
     }
 
+    #[rstest]
     #[tokio::test]
-    async fn ユーザ削除は不正なidで失敗する() {
+    async fn ユーザ削除は不正なidで失敗する(jwt_issuer: Arc<JwtIssuer>) {
         let mut registry = MockAppRegistryExt::new();
-        let jwt_issuer = Arc::new(JwtIssuer::new("test-secret".to_string(), 60_u64 * 60));
         registry
             .expect_jwt_issuer()
             .return_const(jwt_issuer.clone());
@@ -309,6 +304,7 @@ mod tests {
         assert!(matches!(err, AppError::ConvertToUuidError(_)));
     }
 
+    #[rstest]
     #[tokio::test]
     async fn ユーザ一覧はauthorizationヘッダがないと401を返す() {
         let mut repo = MockUserRepository::new();
@@ -328,15 +324,15 @@ mod tests {
         assert!(matches!(err, AppError::Unauthorized(_)));
     }
 
+    #[rstest]
     #[tokio::test]
-    async fn ユーザ一覧は不正jwtで401を返す() {
+    async fn ユーザ一覧は不正jwtで401を返す(jwt_issuer: Arc<JwtIssuer>) {
         let mut repo = MockUserRepository::new();
         repo.expect_find_all().times(0);
 
         let mut registry = MockAppRegistryExt::new();
         let repo_arc: Arc<dyn UserRepository> = Arc::new(repo);
         registry.expect_user_repository().return_const(repo_arc);
-        let jwt_issuer = Arc::new(JwtIssuer::new("correct-secret".to_string(), 60_u64 * 60));
         registry
             .expect_jwt_issuer()
             .return_const(jwt_issuer.clone());
@@ -353,6 +349,7 @@ mod tests {
         assert!(matches!(err, AppError::Unauthorized(_)));
     }
 
+    #[rstest]
     #[tokio::test]
     async fn ユーザ削除はauthorizationヘッダがないと401を返す() {
         let user_id = UserId::new();
@@ -373,8 +370,9 @@ mod tests {
         assert!(matches!(err, AppError::Unauthorized(_)));
     }
 
+    #[rstest]
     #[tokio::test]
-    async fn 自分情報取得は200とユーザ情報を返す() {
+    async fn 自分情報取得は200とユーザ情報を返す(jwt_issuer: Arc<JwtIssuer>) {
         let user_id = UserId::new();
         let mut repo = MockUserRepository::new();
         let user_id_for_match = user_id;
@@ -391,7 +389,6 @@ mod tests {
         let mut registry = MockAppRegistryExt::new();
         let repo_arc: Arc<dyn UserRepository> = Arc::new(repo);
         registry.expect_user_repository().return_const(repo_arc);
-        let jwt_issuer = Arc::new(JwtIssuer::new("test-secret".to_string(), 60_u64 * 60));
         registry
             .expect_jwt_issuer()
             .return_const(jwt_issuer.clone());
@@ -409,6 +406,7 @@ mod tests {
         assert_eq!(body.email, "alice@example.com");
     }
 
+    #[rstest]
     #[tokio::test]
     async fn 自分情報取得はauthorizationヘッダがないと401を返す() {
         let mut repo = MockUserRepository::new();
@@ -428,15 +426,15 @@ mod tests {
         assert!(matches!(err, AppError::Unauthorized(_)));
     }
 
+    #[rstest]
     #[tokio::test]
-    async fn 自分情報取得は不正jwtで401を返す() {
+    async fn 自分情報取得は不正jwtで401を返す(jwt_issuer: Arc<JwtIssuer>) {
         let mut repo = MockUserRepository::new();
         repo.expect_find_by_id().times(0);
 
         let mut registry = MockAppRegistryExt::new();
         let repo_arc: Arc<dyn UserRepository> = Arc::new(repo);
         registry.expect_user_repository().return_const(repo_arc);
-        let jwt_issuer = Arc::new(JwtIssuer::new("correct-secret".to_string(), 60_u64 * 60));
         registry
             .expect_jwt_issuer()
             .return_const(jwt_issuer.clone());
@@ -453,8 +451,9 @@ mod tests {
         assert!(matches!(err, AppError::Unauthorized(_)));
     }
 
+    #[rstest]
     #[tokio::test]
-    async fn 自分情報取得はユーザが存在しないと404を返す() {
+    async fn 自分情報取得はユーザが存在しないと404を返す(jwt_issuer: Arc<JwtIssuer>) {
         let user_id = UserId::new();
         let mut repo = MockUserRepository::new();
         let user_id_for_match = user_id;
@@ -465,7 +464,6 @@ mod tests {
         let mut registry = MockAppRegistryExt::new();
         let repo_arc: Arc<dyn UserRepository> = Arc::new(repo);
         registry.expect_user_repository().return_const(repo_arc);
-        let jwt_issuer = Arc::new(JwtIssuer::new("test-secret".to_string(), 60_u64 * 60));
         registry
             .expect_jwt_issuer()
             .return_const(jwt_issuer.clone());
@@ -480,8 +478,9 @@ mod tests {
         assert!(matches!(err, AppError::EntityNotFoundError(_)));
     }
 
+    #[rstest]
     #[tokio::test]
-    async fn パスワード更新は204を返す() {
+    async fn パスワード更新は204を返す(jwt_issuer: Arc<JwtIssuer>) {
         let user_id = UserId::new();
         let mut repo = MockUserRepository::new();
         let user_id_for_match = user_id;
@@ -496,7 +495,6 @@ mod tests {
         let mut registry = MockAppRegistryExt::new();
         let repo_arc: Arc<dyn UserRepository> = Arc::new(repo);
         registry.expect_user_repository().return_const(repo_arc);
-        let jwt_issuer = Arc::new(JwtIssuer::new("test-secret".to_string(), 60_u64 * 60));
         registry
             .expect_jwt_issuer()
             .return_const(jwt_issuer.clone());
@@ -513,6 +511,7 @@ mod tests {
         assert_eq!(status, StatusCode::NO_CONTENT);
     }
 
+    #[rstest]
     #[tokio::test]
     async fn パスワード更新はauthorizationヘッダがないと401を返す() {
         let mut repo = MockUserRepository::new();
@@ -534,15 +533,15 @@ mod tests {
         assert!(matches!(err, AppError::Unauthorized(_)));
     }
 
+    #[rstest]
     #[tokio::test]
-    async fn パスワード更新は不正jwtで401を返す() {
+    async fn パスワード更新は不正jwtで401を返す(jwt_issuer: Arc<JwtIssuer>) {
         let mut repo = MockUserRepository::new();
         repo.expect_update_password().times(0);
 
         let mut registry = MockAppRegistryExt::new();
         let repo_arc: Arc<dyn UserRepository> = Arc::new(repo);
         registry.expect_user_repository().return_const(repo_arc);
-        let jwt_issuer = Arc::new(JwtIssuer::new("correct-secret".to_string(), 60_u64 * 60));
         registry
             .expect_jwt_issuer()
             .return_const(jwt_issuer.clone());
@@ -561,8 +560,9 @@ mod tests {
         assert!(matches!(err, AppError::Unauthorized(_)));
     }
 
+    #[rstest]
     #[tokio::test]
-    async fn パスワード更新は現在パスワード不一致で401を返す() {
+    async fn パスワード更新は現在パスワード不一致で401を返す(jwt_issuer: Arc<JwtIssuer>) {
         let user_id = UserId::new();
         let mut repo = MockUserRepository::new();
         let user_id_for_match = user_id;
@@ -577,7 +577,6 @@ mod tests {
         let mut registry = MockAppRegistryExt::new();
         let repo_arc: Arc<dyn UserRepository> = Arc::new(repo);
         registry.expect_user_repository().return_const(repo_arc);
-        let jwt_issuer = Arc::new(JwtIssuer::new("test-secret".to_string(), 60_u64 * 60));
         registry
             .expect_jwt_issuer()
             .return_const(jwt_issuer.clone());
@@ -594,15 +593,15 @@ mod tests {
         assert!(matches!(err, AppError::Unauthorized(_)));
     }
 
+    #[rstest]
     #[tokio::test]
-    async fn パスワード更新はバリデーションエラーで400を返す() {
+    async fn パスワード更新はバリデーションエラーで400を返す(jwt_issuer: Arc<JwtIssuer>) {
         let mut repo = MockUserRepository::new();
         repo.expect_update_password().times(0);
 
         let mut registry = MockAppRegistryExt::new();
         let repo_arc: Arc<dyn UserRepository> = Arc::new(repo);
         registry.expect_user_repository().return_const(repo_arc);
-        let jwt_issuer = Arc::new(JwtIssuer::new("test-secret".to_string(), 60_u64 * 60));
         registry
             .expect_jwt_issuer()
             .return_const(jwt_issuer.clone());
