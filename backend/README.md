@@ -34,6 +34,13 @@ Rust 製の API/CLI サービス。本番用を見据え、レイヤード構成
 - `cargo run --bin app` で開発用 HTTP サーバー起動（ポート 8080、`ENV` でログレベル切り替え）。
 - `compose.yaml` で Postgres・Redis と合わせて起動可能（`.env` に各種ポート/認証を設定）。本番向け設定は今後追加。
 
+## テスト方針
+- adapter は `sqlx::test` を基本にする。
+- api は `rstest` を基本にする。
+- api の単体テストは分岐/バリデーション/エラーハンドリングに集中する。
+- api の統合テストは最小限のスモークテストに絞る。
+- 統合テストは `backend/api/tests/integration/main.rs` 配下で管理する。
+
 ## 今後のタスク
 - adapter 層に Postgres/Redis 実装とマイグレーション手順を追加。
 - api 層に Todo のエンドポイントと DTO を整備。

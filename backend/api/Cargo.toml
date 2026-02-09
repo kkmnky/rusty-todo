@@ -23,3 +23,10 @@ async-trait = { workspace = true }
 sqlx = { workspace = true }
 bcrypt = { workspace = true }
 rstest = { workspace = true }
+serde_json = { workspace = true }
+adapter = { workspace = true }
+tower = { workspace = true }
+
+[[test]]
+name = "integration"
+path = "tests/integration/main.rs"

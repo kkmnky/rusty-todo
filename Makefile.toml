@@ -168,6 +168,52 @@ args = [
   "--test-threads=4",
 ]
 
+[tasks."bk:test-unit"]
+description = "バックエンドのユニットテストのみ実行する。"
+category = "Backend Tests"
+extend = "set-env-local"
+cwd = "backend"
+install_crate = { crate_name = "cargo-nextest", binary = "cargo", test_arg = [
+  "nextest",
+  "--help",
+] }
+command = "cargo"
+args = [
+  "nextest",
+  "run",
+  "--workspace",
+  "--lib",
+  "--status-level",
+  "all",
+  "--test-threads=4",
+]
+
+[tasks."bk:test-integration"]
+description = "バックエンドの統合テストのみ実行する。"
+category = "Backend Tests"
+extend = "set-env-local"
+cwd = "backend"
+install_crate = { crate_name = "cargo-nextest", binary = "cargo", test_arg = [
+  "nextest",
+  "--help",
+] }
+command = "cargo"
+args = [
+  "nextest",
+  "run",
+  "--workspace",
+  "--test",
+  "integration",
+  "--status-level",
+  "all",
+  "--test-threads=4",
+]
+
+[tasks."bk:test-all"]
+description = "バックエンドの全テストを実行する。"
+category = "Backend Tests"
+run_task = "bk:test"
+
 [tasks."bk:clippy-ci"]
 description = "CI 向けに clippy を警告エラー化で実行する。"
 category = "Backend Dev"
