@@ -138,8 +138,8 @@
        - [x] kernel: `usecase/user/mod.rs` と `usecase/mod.rs` を更新（モジュール公開）
        - [x] api: `register_user` をUsecase経由に切り替え（入力変換はハンドラ内で実施）
        - [x] テスト: 既存APIテストで回帰確認（必要ならUsecaseの最小ユニットテスト追加）
-     - [ ] ユーザ一覧のUsecase化（Usecase追加・API移行・回帰確認）
-     - [ ] ユーザ削除のUsecase化（Usecase追加・API移行・回帰確認）
+     - [x] ユーザ一覧のUsecase化（Usecase追加・API移行・回帰確認）
+     - [x] ユーザ削除のUsecase化（Usecase追加・API移行・回帰確認）
      - [ ] 自分情報取得のUsecase化（Usecase追加・API移行・未存在はEntityNotFound）
      - [ ] パスワード更新のUsecase化（Usecase追加・API移行・回帰確認）
    - [ ] ログ出力の整備（共通のログ方針/出力の確認）

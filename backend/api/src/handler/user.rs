@@ -5,11 +5,12 @@ use axum::{
 };
 use garde::Validate;
 use kernel::{
-    model::{
-        id::UserId,
-        user::event::{DeleteUser, UpdatePassword},
+    model::{id::UserId, user::event::UpdatePassword},
+    usecase::user::{
+        delete::{DeleteUserInput, DeleteUserUsecase},
+        list::ListUsersUsecase,
+        register::RegisterUserUsecase,
     },
-    usecase::user::register::RegisterUserUsecase,
 };
 use registry::AppRegistry;
 
@@ -35,9 +36,9 @@ pub async fn list_users(
 ) -> AppResult<(StatusCode, Json<UsersResponse>)> {
     require_auth(&registry, &headers)?;
 
-    let items = registry
-        .user_repository()
-        .find_all()
+    let usecase = ListUsersUsecase::new(registry.user_repository());
+    let items = usecase
+        .execute()
         .await?
         .into_iter()
         .map(UserResponse::from)
@@ -54,10 +55,8 @@ pub async fn delete_user(
     require_auth(&registry, &headers)?;
 
     let user_id: UserId = user_id.parse()?;
-    registry
-        .user_repository()
-        .delete(DeleteUser { id: user_id })
-        .await?;
+    let usecase = DeleteUserUsecase::new(registry.user_repository());
+    usecase.execute(DeleteUserInput { id: user_id }).await?;
 
     Ok(StatusCode::NO_CONTENT)
 }
