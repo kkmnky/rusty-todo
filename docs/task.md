@@ -132,7 +132,7 @@
      - [x] API は `rstest` を基本にする
      - [x] API の単体テストは分岐/バリデーション/エラーハンドリングに集中する
      - [x] API の統合テストは最小限のスモークテストに絞る
-   - [ ] ユーザのユースケース化は認証のユースケース実装が完了してから着手
+   - [x] ユーザのユースケース化は認証のユースケース実装が完了してから着手
      - [x] ユーザ登録のUsecase化（Usecase追加・API移行・回帰確認）
        - [x] kernel: `usecase/user/register.rs` を追加（Input/Output定義、`UserRepository::create` 呼び出し）
        - [x] kernel: `usecase/user/mod.rs` と `usecase/mod.rs` を更新（モジュール公開）
@@ -140,8 +140,8 @@
        - [x] テスト: 既存APIテストで回帰確認（必要ならUsecaseの最小ユニットテスト追加）
      - [x] ユーザ一覧のUsecase化（Usecase追加・API移行・回帰確認）
      - [x] ユーザ削除のUsecase化（Usecase追加・API移行・回帰確認）
-     - [ ] 自分情報取得のUsecase化（Usecase追加・API移行・未存在はEntityNotFound）
-     - [ ] パスワード更新のUsecase化（Usecase追加・API移行・回帰確認）
+     - [x] 自分情報取得のUsecase化（Usecase追加・API移行・未存在はEntityNotFound）
+     - [x] パスワード更新のUsecase化（Usecase追加・API移行・回帰確認）
    - [ ] ログ出力の整備（共通のログ方針/出力の確認）
 8. [x] ユーザ用マイグレーションを作成・適用する: users テーブル、必要ならインデックス
 9. [x] ユーザ機能の動作確認をする: 統合テストまたは手動でサインアップ→ログイン→取得/更新/削除を確認

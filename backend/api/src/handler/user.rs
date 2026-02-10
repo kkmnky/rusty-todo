@@ -5,9 +5,11 @@ use axum::{
 };
 use garde::Validate;
 use kernel::{
-    model::{id::UserId, user::event::UpdatePassword},
+    model::id::UserId,
     usecase::user::{
+        change_password::{ChangePasswordInput, ChangePasswordUsecase},
         delete::{DeleteUserInput, DeleteUserUsecase},
+        get_current_user::GetCurrentUserUsecase,
         list::ListUsersUsecase,
         register::RegisterUserUsecase,
     },
@@ -16,7 +18,7 @@ use registry::AppRegistry;
 
 use crate::handler::auth::require_auth;
 use crate::model::user::{ChangePasswordRequest, RegisterUserRequest, UserResponse, UsersResponse};
-use shared::error::{AppError, AppResult};
+use shared::error::AppResult;
 
 pub async fn register_user(
     State(registry): State<AppRegistry>,
@@ -68,11 +70,8 @@ pub async fn get_current_user(
     let verified_token = require_auth(&registry, &headers)?;
     let user_id = verified_token.sub;
 
-    let user = registry
-        .user_repository()
-        .find_by_id(user_id)
-        .await?
-        .ok_or_else(|| AppError::EntityNotFoundError("user not found".into()))?;
+    let usecase = GetCurrentUserUsecase::new(registry.user_repository());
+    let user = usecase.execute(user_id).await?;
 
     Ok((StatusCode::OK, Json(user.into())))
 }
@@ -85,13 +84,14 @@ pub async fn change_password(
     req.validate()?;
     let verified_token = require_auth(&registry, &headers)?;
 
-    let event = UpdatePassword {
+    let input = ChangePasswordInput {
         id: verified_token.sub,
         current_password: req.current_password,
         new_password: req.new_password,
     };
 
-    registry.user_repository().update_password(event).await?;
+    let usecase = ChangePasswordUsecase::new(registry.user_repository());
+    usecase.execute(input).await?;
 
     Ok(StatusCode::NO_CONTENT)
 }
