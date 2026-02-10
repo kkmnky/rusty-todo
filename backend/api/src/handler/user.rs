@@ -4,23 +4,27 @@ use axum::{
     http::{HeaderMap, StatusCode},
 };
 use garde::Validate;
-use kernel::model::{
-    id::UserId,
-    user::event::{DeleteUser, UpdatePassword},
+use kernel::{
+    model::{
+        id::UserId,
+        user::event::{DeleteUser, UpdatePassword},
+    },
+    usecase::user::register::RegisterUserUsecase,
 };
 use registry::AppRegistry;
 
 use crate::handler::auth::require_auth;
-use crate::model::user::{ChangePasswordRequest, CreateUserRequest, UserResponse, UsersResponse};
+use crate::model::user::{ChangePasswordRequest, RegisterUserRequest, UserResponse, UsersResponse};
 use shared::error::{AppError, AppResult};
 
 pub async fn register_user(
     State(registry): State<AppRegistry>,
-    Json(req): Json<CreateUserRequest>,
+    Json(req): Json<RegisterUserRequest>,
 ) -> AppResult<(StatusCode, Json<UserResponse>)> {
     req.validate()?;
 
-    let registered_user = registry.user_repository().create(req.into()).await?;
+    let usecase = RegisterUserUsecase::new(registry.user_repository());
+    let registered_user = usecase.execute(req.into()).await?;
 
     Ok((StatusCode::CREATED, Json(registered_user.into())))
 }
@@ -96,12 +100,12 @@ pub async fn change_password(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::handler::test_support::{
+        build_auth_header, build_auth_header_for_user, build_valid_auth_header,
+    };
     use axum::{
         extract::{Path, State},
         http::HeaderMap,
-    };
-    use crate::handler::test_support::{
-        build_auth_header, build_auth_header_for_user, build_valid_auth_header,
     };
     use kernel::repository::user::{MockUserRepository, UserRepository};
     use kernel::{
@@ -137,7 +141,7 @@ mod tests {
             .return_const(repo_arc.clone());
 
         let registry: AppRegistry = Arc::new(registry);
-        let req = CreateUserRequest::new(
+        let req = RegisterUserRequest::new(
             "Alice".to_string(),
             "alice@example.com".to_string(),
             "password123".to_string(),
@@ -222,7 +226,7 @@ mod tests {
     async fn ユーザ追加はemail不正で失敗する() {
         let registry = MockAppRegistryExt::new();
         let registry: AppRegistry = Arc::new(registry);
-        let req = CreateUserRequest::new(
+        let req = RegisterUserRequest::new(
             "Alice".to_string(),
             "invalid-email".to_string(),
             "password123".to_string(),
@@ -247,7 +251,7 @@ mod tests {
         registry.expect_user_repository().return_const(repo_arc);
 
         let registry: AppRegistry = Arc::new(registry);
-        let req = CreateUserRequest::new(
+        let req = RegisterUserRequest::new(
             "Alice".to_string(),
             "alice@example.com".to_string(),
             "password123".to_string(),
@@ -453,7 +457,9 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
-    async fn 自分情報取得はユーザが存在しないと404を返す(jwt_issuer: Arc<JwtIssuer>) {
+    async fn 自分情報取得はユーザが存在しないと404を返す(
+        jwt_issuer: Arc<JwtIssuer>,
+    ) {
         let user_id = UserId::new();
         let mut repo = MockUserRepository::new();
         let user_id_for_match = user_id;
@@ -562,7 +568,9 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
-    async fn パスワード更新は現在パスワード不一致で401を返す(jwt_issuer: Arc<JwtIssuer>) {
+    async fn パスワード更新は現在パスワード不一致で401を返す(
+        jwt_issuer: Arc<JwtIssuer>,
+    ) {
         let user_id = UserId::new();
         let mut repo = MockUserRepository::new();
         let user_id_for_match = user_id;
@@ -595,7 +603,9 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
-    async fn パスワード更新はバリデーションエラーで400を返す(jwt_issuer: Arc<JwtIssuer>) {
+    async fn パスワード更新はバリデーションエラーで400を返す(
+        jwt_issuer: Arc<JwtIssuer>,
+    ) {
         let mut repo = MockUserRepository::new();
         repo.expect_update_password().times(0);
 

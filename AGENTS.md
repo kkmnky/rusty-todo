@@ -5,7 +5,9 @@
 - コード編集は可能な限り `apply_patch` を使い、小さな差分で示す。生成物の丸ごと貼り付けは避ける。
 - 構成は `rusty-book-manager` に倣う。`src`/`kernel`/`adapter`/`api`/`registry`/`shared` に加え、`frontend/` も用意して UI から操作できるようにする。
 - 基本検証コマンド: `cargo fmt` / `cargo clippy` / `cargo test`（将来 `cargo make` に集約）。実行できない場合は理由を明示。
+- makers でのテスト実行: `bk:test-unit`（単体）、`bk:test-integration`（統合）、`bk:test-all`（全体）。
 - 外部ネットワークや追加ツール導入が必要な場合は事前に相談。Docker/compose 設定も段階的に追加する。
+- 命名方針: API/Usecase は Register、Adapter/Repository/イベントは Create を基本にする。
 - バックエンドのAPIを実装するときはテスト駆動でやりたいので以下のように実施すること
   - docs/task.mdで実施するタスクを管理すること
   - 大まかな流れは以下の通り
@@ -20,3 +22,4 @@
 - テストの書き方は一貫性を保つため、既存のテストケースと同じように実装すること
 - docs/task.md のチェックはテスト実行で確認後に付ける
 - テストケース合意後にテスト実装する際は、テストコード以外を追加しない。存在しないモデル/関数を使ってエラーになっても良い
+- API の統合テストは `backend/api/tests/integration/main.rs` を入口に追加する（`--test integration` で実行）。

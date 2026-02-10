@@ -1,8 +1,8 @@
 use derive_new::new;
 use garde::Validate;
-use kernel::model::{
-    id::UserId,
-    user::{User, event::CreateUser},
+use kernel::{
+    model::{id::UserId, user::User},
+    usecase::user::register::RegisterUserInput,
 };
 use serde::{Deserialize, Serialize};
 
@@ -36,7 +36,7 @@ pub struct ChangePasswordRequest {
 
 #[derive(Deserialize, Validate, new)]
 #[serde(rename_all = "camelCase")]
-pub struct CreateUserRequest {
+pub struct RegisterUserRequest {
     #[garde(length(min = 1))]
     name: String,
     #[garde(email)]
@@ -45,9 +45,9 @@ pub struct CreateUserRequest {
     password: String,
 }
 
-impl From<CreateUserRequest> for CreateUser {
-    fn from(value: CreateUserRequest) -> Self {
-        let CreateUserRequest {
+impl From<RegisterUserRequest> for RegisterUserInput {
+    fn from(value: RegisterUserRequest) -> Self {
+        let RegisterUserRequest {
             name,
             email,
             password,

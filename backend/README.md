@@ -28,6 +28,9 @@ Rust 製の API/CLI サービス。本番用を見据え、レイヤード構成
 2. 隣接するレイヤーのコンポーネントしか呼び出さない
 3. 下位レイヤーは上位レイヤーのコンポーネントを呼び出さない
 
+## 命名方針
+- API/Usecase は Register を基本にする
+- Adapter/Repository/イベントは Create を基本にする
 
 ## ローカル実行
 - `cargo fmt` / `cargo clippy` / `cargo test` を基本の検証コマンド。
