@@ -143,6 +143,23 @@
      - [x] 自分情報取得のUsecase化（Usecase追加・API移行・未存在はEntityNotFound）
      - [x] パスワード更新のUsecase化（Usecase追加・API移行・回帰確認）
    - [ ] ログ出力の整備（共通のログ方針/出力の確認）
+     - 方針:
+       - `tracing` + OpenTelemetry 連携でトレース出力
+       - 送信先: Grafana スタック（Tempo）へ OTLP/gRPC
+         - エンドポイント: `localhost:4317`
+         - observability は `/observability` の compose を makers コマンドで独立起動
+       - Resource: `service.name=rusty-todo`, `deployment.environment=dev|prod`
+       - リクエストトレースは `tower_http::trace::TraceLayer` を使い 1 リクエスト 1 span
+         - span: `request_id`/`method`/`path`
+         - レスポンス時に `status`/`latency_ms` を event 出力
+         - 認証後に `user_id` を span に `record`
+         - `X-Request-Id` 優先、無ければ UUID 生成
+       - ログは `tracing-subscriber` で出力
+         - レベル: dev=debug, prod=info（`RUST_LOG` 優先）
+         - 形式: dev=pretty, prod=json（`LOG_FORMAT=json|pretty` で切替）
+       - エラー: 4xx=warn, 5xx=error、`error.kind`/`error.message`/`error.cause_chain`
+       - 機密: `password`/`token` は出さない、`email` はマスク
+       - DB/Redis は失敗時のみ。SQL/値は出さない
 8. [x] ユーザ用マイグレーションを作成・適用する: users テーブル、必要ならインデックス
 9. [x] ユーザ機能の動作確認をする: 統合テストまたは手動でサインアップ→ログイン→取得/更新/削除を確認
 10. [ ] Todo CRUD を実装する: ドメイン/ユースケース/リポジトリ/エンドポイント（`GET /todos`, `GET /todos/{id}`, `POST /todos`, `PUT /todos/{id}`, `DELETE /todos/{id}`）

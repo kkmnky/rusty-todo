@@ -19,6 +19,7 @@ REDIS_PORT_INNER = 6379
 AUTH_TOKEN_TTL = 86400
 AUTH_JWT_SECRET = "secret-key"
 LOADTEST_HOST = "http://localhost:8080"
+OTEL_EXPORTER_OTLP_ENDPOINT = "http://localhost:4317"
 
 # Docker Composeのネットワーク内でのDB等への接続情報
 [tasks.set-env-docker.env]

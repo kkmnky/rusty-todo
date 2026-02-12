@@ -1,10 +1,12 @@
 use axum::{extract::State, http::StatusCode};
 use registry::AppRegistry;
 
+#[tracing::instrument(name = "health_check", skip_all)]
 pub async fn health_check() -> StatusCode {
     StatusCode::OK
 }
 
+#[tracing::instrument(name = "health_check_db", skip_all)]
 pub async fn health_check_db(State(registry): State<AppRegistry>) -> StatusCode {
     if registry.health_check_repository().check_db().await {
         StatusCode::OK

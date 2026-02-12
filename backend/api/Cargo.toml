@@ -15,6 +15,7 @@ mockall = { workspace = true }
 serde = { workspace = true }
 garde = { workspace = true }
 derive-new = { workspace = true }
+tracing = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true }
