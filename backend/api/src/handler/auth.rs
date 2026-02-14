@@ -60,6 +60,7 @@ pub(crate) fn require_auth(
 ) -> AppResult<VerifiedToken> {
     let access_token = extract_bearer(headers)?;
     let verified_token = registry.jwt_issuer().verify_token(&access_token)?;
+    tracing::Span::current().record("user_id", tracing::field::display(verified_token.sub));
     Ok(verified_token)
 }
 
@@ -83,12 +84,12 @@ pub(crate) fn extract_bearer(headers: &HeaderMap) -> AppResult<AccessToken> {
 #[cfg(test)]
 mod tests {
     use super::{auth_login, auth_logout};
+    use crate::handler::test_support::build_auth_header;
     use axum::{
         Json,
         extract::State,
         http::{HeaderMap, StatusCode},
     };
-    use crate::handler::test_support::build_auth_header;
     use kernel::model::{
         auth::{AccessToken, UserCredential},
         id::UserId,
@@ -104,15 +105,14 @@ mod tests {
 
     #[fixture]
     fn jwt_issuer() -> Arc<JwtIssuer> {
-        Arc::new(JwtIssuer::new(
-            "test-secret".to_string(),
-            60_u64 * 60 * 24,
-        ))
+        Arc::new(JwtIssuer::new("test-secret".to_string(), 60_u64 * 60 * 24))
     }
 
     #[rstest]
     #[tokio::test]
-    async fn ログインは200とアクセストークンと期限を返す(jwt_issuer: Arc<JwtIssuer>) {
+    async fn ログインは200とアクセストークンと期限を返す(
+        jwt_issuer: Arc<JwtIssuer>,
+    ) {
         let user_id = UserId::new();
         let email = "alice@example.com".to_string();
         let password = "password123".to_string();

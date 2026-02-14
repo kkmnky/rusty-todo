@@ -29,6 +29,7 @@ tokio = { version = "1.48.0", features = ["full"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
 tower = "0.5.2"
+tower-http = { version = "0.6.2", features = ["trace", "request-id"] }
 strum = { version = "0.27.2", features = ["derive"] }
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.20", features = ["env-filter", "json"] }
@@ -67,9 +68,12 @@ shared = { workspace = true }
 axum = { workspace = true }
 tokio = { workspace = true }
 anyhow = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 opentelemetry = { workspace = true }
 opentelemetry_sdk = { workspace = true }
 opentelemetry-otlp = { workspace = true }
 tracing-opentelemetry = { workspace = true }
+uuid = { workspace = true }

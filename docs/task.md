@@ -143,23 +143,27 @@
      - [x] 自分情報取得のUsecase化（Usecase追加・API移行・未存在はEntityNotFound）
      - [x] パスワード更新のUsecase化（Usecase追加・API移行・回帰確認）
    - [ ] ログ出力の整備（共通のログ方針/出力の確認）
-     - 方針:
-       - `tracing` + OpenTelemetry 連携でトレース出力
-       - 送信先: Grafana スタック（Tempo）へ OTLP/gRPC
-         - エンドポイント: `localhost:4317`
-         - observability は `/observability` の compose を makers コマンドで独立起動
-       - Resource: `service.name=rusty-todo`, `deployment.environment=dev|prod`
-       - リクエストトレースは `tower_http::trace::TraceLayer` を使い 1 リクエスト 1 span
-         - span: `request_id`/`method`/`path`
-         - レスポンス時に `status`/`latency_ms` を event 出力
-         - 認証後に `user_id` を span に `record`
-         - `X-Request-Id` 優先、無ければ UUID 生成
-       - ログは `tracing-subscriber` で出力
-         - レベル: dev=debug, prod=info（`RUST_LOG` 優先）
-         - 形式: dev=pretty, prod=json（`LOG_FORMAT=json|pretty` で切替）
-       - エラー: 4xx=warn, 5xx=error、`error.kind`/`error.message`/`error.cause_chain`
-       - 機密: `password`/`token` は出さない、`email` はマスク
-       - DB/Redis は失敗時のみ。SQL/値は出さない
+     - 方針詳細は `backend/README.md` の「ログ/トレース方針」を参照
+     - 実装タスク（リクエスト/ログ基盤）
+       - [x] `backend/src/bin/app.rs` に `SetRequestIdLayer` / `PropagateRequestIdLayer` / `TraceLayer` を組み込み、1リクエスト1spanを有効化
+       - [x] `X-Request-Id` 優先、未指定時 UUID 生成のルールを実装
+       - [x] `request.received`=`debug`、`request.completed`=`info`、4xx=`warn`、5xx=`error` のイベント出力を実装
+       - [x] リクエストspanに `request_id` / `method` / `path`、レスポンスイベントに `status` / `latency_ms` を出力
+       - [x] 認証後に `user_id` を span へ record する処理を実装
+     - 実装タスク（エラー/機密）
+       - [ ] `error.kind` を `AppError` enum名で出力する共通処理を実装
+       - [ ] `error.message` / `error.cause_chain` を構造化して出力する
+       - [ ] `password` / `token` / `email` 平文をログへ出さないガードを実装
+       - [ ] `attributes.user.email_masked`（先頭1文字+`*`）のマスク処理を実装
+     - 実装タスク（DB/Redis計装）
+       - [ ] `sqlx-tracing` を組み込み、DBスパンをトレースへ出力
+       - [ ] `ENV=dev` かつ `RUST_LOG=debug` 時のみ SQL 文出力を許可（バインド値は常に非出力）
+       - [ ] `otel-instrumentation-redis` を組み込み、Redisスパンをトレースへ出力
+       - [ ] Redisログは `command` のみ出力し、key/value は非出力
+     - 実装タスク（検証と完了判定）
+       - [ ] `cargo fmt` / `cargo clippy` / `cargo test` を実行してビルド・静的検証を通す
+       - [ ] Grafana/Tempo で Done条件（README記載6項目）を手動確認する
+       - [ ] 目視確認結果を `docs/task.md` に作業記録として追記する
 8. [x] ユーザ用マイグレーションを作成・適用する: users テーブル、必要ならインデックス
 9. [x] ユーザ機能の動作確認をする: 統合テストまたは手動でサインアップ→ログイン→取得/更新/削除を確認
 10. [ ] Todo CRUD を実装する: ドメイン/ユースケース/リポジトリ/エンドポイント（`GET /todos`, `GET /todos/{id}`, `POST /todos`, `PUT /todos/{id}`, `DELETE /todos/{id}`）

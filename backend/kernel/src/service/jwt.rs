@@ -134,9 +134,7 @@ mod tests {
         .map(AccessToken)
         .expect("jwt生成");
 
-        let err = issuer
-            .verify_token(&token)
-            .expect_err("sub不正は失敗する");
+        let err = issuer.verify_token(&token).expect_err("sub不正は失敗する");
         let _ = err;
     }
 }
