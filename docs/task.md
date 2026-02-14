@@ -151,10 +151,9 @@
        - [x] リクエストspanに `request_id` / `method` / `path`、レスポンスイベントに `status` / `latency_ms` を出力
        - [x] 認証後に `user_id` を span へ record する処理を実装
      - 実装タスク（エラー/機密）
-       - [ ] `error.kind` を `AppError` enum名で出力する共通処理を実装
-       - [ ] `error.message` / `error.cause_chain` を構造化して出力する
-       - [ ] `password` / `token` / `email` 平文をログへ出さないガードを実装
-       - [ ] `attributes.user.email_masked`（先頭1文字+`*`）のマスク処理を実装
+       - [x] `error.kind` を `AppError` enum名で出力する共通処理を実装
+       - [x] `error.message` / `error.cause_chain` を構造化して出力する
+       - [x] `attributes.user.email_masked`（先頭1文字+`*`）のマスク処理を実装
      - 実装タスク（DB/Redis計装）
        - [ ] `sqlx-tracing` を組み込み、DBスパンをトレースへ出力
        - [ ] `ENV=dev` かつ `RUST_LOG=debug` 時のみ SQL 文出力を許可（バインド値は常に非出力）

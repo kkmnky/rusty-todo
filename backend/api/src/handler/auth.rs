@@ -13,7 +13,10 @@ use kernel::{
     },
 };
 use registry::AppRegistry;
-use shared::error::{AppError, AppResult};
+use shared::{
+    error::{AppError, AppResult},
+    logging::mask_email,
+};
 
 use crate::model::auth::{AccessTokenResponse, LoginRequest};
 
@@ -21,6 +24,13 @@ pub async fn auth_login(
     State(registry): State<AppRegistry>,
     Json(req): Json<LoginRequest>,
 ) -> AppResult<(StatusCode, Json<AccessTokenResponse>)> {
+    let email_masked = mask_email(&req.email);
+    tracing::debug!(
+        event.name = "auth.login.attempt",
+        attributes.user.email_masked = %email_masked,
+        "login attempt"
+    );
+
     req.validate()?;
 
     let usecase = LoginUsecase::new(registry.auth_repository(), registry.jwt_issuer());
@@ -30,7 +40,15 @@ pub async fn auth_login(
             email: req.email,
             password: req.password,
         })
-        .await?;
+        .await
+        .inspect_err(|err| {
+            tracing::warn!(
+                event.name = "auth.login.failed",
+                attributes.user.email_masked = %email_masked,
+                error.message = %err,
+                "login failed"
+            );
+        })?;
 
     Ok((
         StatusCode::OK,

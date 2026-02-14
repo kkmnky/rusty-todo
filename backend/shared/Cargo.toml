@@ -14,3 +14,4 @@ bcrypt = { workspace = true }
 sqlx = { workspace = true }
 redis = { workspace = true }
 jsonwebtoken = { workspace = true }
+tracing = { workspace = true }

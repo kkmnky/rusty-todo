@@ -2749,6 +2749,7 @@ dependencies = [
  "sqlx",
  "strum",
  "thiserror",
+ "tracing",
  "uuid",
 ]
 

@@ -27,9 +27,9 @@ pub enum AppError {
     JwtError(#[from] jsonwebtoken::errors::Error),
 }
 
-impl IntoResponse for AppError {
-    fn into_response(self) -> axum::response::Response {
-        let status_code = match self {
+impl AppError {
+    pub fn status_code(&self) -> StatusCode {
+        match self {
             AppError::Unauthorized(_) => StatusCode::UNAUTHORIZED,
             AppError::EntityNotFoundError(_) => StatusCode::NOT_FOUND,
             AppError::ConvertToUuidError(_) => StatusCode::BAD_REQUEST,
@@ -41,8 +41,53 @@ impl IntoResponse for AppError {
             AppError::KeyValueStoreError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             AppError::JwtError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             AppError::ConversionEntityError(_) => StatusCode::BAD_REQUEST,
-        };
-        status_code.into_response()
+        }
+    }
+
+    pub fn kind(&self) -> &str {
+        match self {
+            AppError::Unauthorized(_) => "Unauthorized",
+            AppError::EntityNotFoundError(_) => "EntityNotFoundError",
+            AppError::ConvertToUuidError(_) => "ConvertToUuidError",
+            AppError::ValidationError(_) => "ValidationError",
+            AppError::HashPasswordError(_) => "HashPasswordError",
+            AppError::SqlExecuteError(_) => "SqlExecuteError",
+            AppError::TransactionError(_) => "TransactionError",
+            AppError::NoRowsAffectedError(_) => "NoRowsAffectedError",
+            AppError::KeyValueStoreError(_) => "KeyValueStoreError",
+            AppError::JwtError(_) => "JwtError",
+            AppError::ConversionEntityError(_) => "ConversionEntityError",
+        }
+    }
+
+    pub fn safe_message(&self) -> String {
+        self.to_string()
+    }
+
+    pub fn cause_chain(&self) -> Vec<String> {
+        let mut out = Vec::new();
+        let mut cur = std::error::Error::source(self);
+        while let Some(e) = cur {
+            out.push(e.to_string());
+            cur = e.source();
+        }
+        out
+    }
+}
+
+impl IntoResponse for AppError {
+    fn into_response(self) -> axum::response::Response {
+        let status = self.status_code();
+        let kind = self.kind();
+        let msg = self.safe_message();
+        let causes = self.cause_chain();
+
+        if status.is_server_error() {
+            tracing::error!(error.kind = kind, error.message = %msg, error.cause_chain = ?causes, status = status.as_u16(), "request failed");
+        } else if status.is_client_error() {
+            tracing::warn!(error.kind = kind, error.message = %msg, error.cause_chain = ?causes, status = status.as_u16(), "request failed");
+        }
+        status.into_response()
     }
 }
 
