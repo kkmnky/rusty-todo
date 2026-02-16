@@ -1,4 +1,5 @@
-use redis::{AsyncCommands, Client};
+use otel_instrumentation_redis::InstrumentedClient;
+use redis::{Client, Cmd, FromRedisValue};
 use shared::{config::RedisConfig, error::AppResult};
 
 use crate::redis::model::{RedisKey, RedisValue};
@@ -6,18 +7,26 @@ use crate::redis::model::{RedisKey, RedisValue};
 pub mod model;
 
 pub struct RedisClient {
-    client: Client,
+    client: InstrumentedClient,
 }
 
 impl RedisClient {
     pub fn new(config: &RedisConfig) -> AppResult<Self> {
         let client = Client::open(format!("redis://{}:{}", config.host, config.port))?;
-        Ok(Self { client })
+        Ok(Self {
+            client: InstrumentedClient::new(client),
+        })
     }
 
     pub async fn set_ex<T: RedisKey>(&self, key: &T, value: &T::Value, ttl: u64) -> AppResult<()> {
         let mut conn = self.client.get_multiplexed_async_connection().await?;
-        let _: () = conn.set_ex(key.inner(), value.inner(), ttl).await?;
+        let mut cmd = Cmd::new();
+        cmd.arg("SETEX")
+            .arg(key.inner())
+            .arg(ttl)
+            .arg(value.inner());
+        let result = conn.req_command(&cmd).await?;
+        let _: () = FromRedisValue::from_redis_value(&result)?;
         Ok(())
     }
 
@@ -29,7 +38,10 @@ impl RedisClient {
 
     pub async fn ttl<T: RedisKey>(&self, key: &T) -> AppResult<i64> {
         let mut conn = self.client.get_multiplexed_async_connection().await?;
-        let ttl: i64 = conn.ttl(key.inner()).await?;
+        let mut cmd = Cmd::new();
+        cmd.arg("TTL").arg(key.inner());
+        let result = conn.req_command(&cmd).await?;
+        let ttl: i64 = FromRedisValue::from_redis_value(&result)?;
         Ok(ttl)
     }
 

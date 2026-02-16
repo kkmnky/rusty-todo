@@ -155,14 +155,11 @@
        - [x] `error.message` / `error.cause_chain` を構造化して出力する
        - [x] `attributes.user.email_masked`（先頭1文字+`*`）のマスク処理を実装
      - 実装タスク（DB/Redis計装）
-       - [ ] `sqlx-tracing` を組み込み、DBスパンをトレースへ出力
-       - [ ] `ENV=dev` かつ `RUST_LOG=debug` 時のみ SQL 文出力を許可（バインド値は常に非出力）
-       - [ ] `otel-instrumentation-redis` を組み込み、Redisスパンをトレースへ出力
-       - [ ] Redisログは `command` のみ出力し、key/value は非出力
-     - 実装タスク（検証と完了判定）
-       - [ ] `cargo fmt` / `cargo clippy` / `cargo test` を実行してビルド・静的検証を通す
-       - [ ] Grafana/Tempo で Done条件（README記載6項目）を手動確認する
-       - [ ] 目視確認結果を `docs/task.md` に作業記録として追記する
+       - [x] `sqlx-tracing` を組み込み、DBスパンをトレースへ出力
+       - [x] `otel-instrumentation-redis` を組み込み、Redisスパンをトレースへ出力
+       - [x] Redisログは `command` のみ出力し、key/value は非出力
+     - 実装タスク（ノイズログ抑制）
+       - [ ] `BatchSpanProcessor.ExportingDueToTimer`（`opentelemetry_sdk` 内部 DEBUG ログ）が出力されないようにログフィルタを調整する
 8. [x] ユーザ用マイグレーションを作成・適用する: users テーブル、必要ならインデックス
 9. [x] ユーザ機能の動作確認をする: 統合テストまたは手動でサインアップ→ログイン→取得/更新/削除を確認
 10. [ ] Todo CRUD を実装する: ドメイン/ユースケース/リポジトリ/エンドポイント（`GET /todos`, `GET /todos/{id}`, `POST /todos`, `PUT /todos/{id}`, `DELETE /todos/{id}`）

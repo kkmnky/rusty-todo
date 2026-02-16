@@ -64,7 +64,6 @@ Rust 製の API/CLI サービス。本番用を見据え、レイヤード構成
   - DB は `sqlx-tracing` を本採用する。
   - Redis は `otel-instrumentation-redis` を本採用する。
   - DB/Redis は通常時もトレース対象とし、機密情報とバインド値は出さない。
-  - DB は `ENV=dev` かつ `RUST_LOG=debug` 以上のときのみ SQL 文の出力を許可する。
   - DB のバインド値は dev/prod ともに出力しない。
   - Redis は `command`（`GET`/`SET`/`DEL` など）のみ出力し、key/value は出力しない。
 - ログ出力

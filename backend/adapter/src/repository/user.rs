@@ -13,6 +13,7 @@ use kernel::{
     service::password,
 };
 use shared::error::{AppError, AppResult};
+use tracing::Instrument;
 
 #[derive(new)]
 pub struct UserRepositoryImpl {
@@ -122,6 +123,12 @@ impl UserRepository for UserRepositoryImpl {
 
     async fn update_password(&self, event: UpdatePassword) -> AppResult<()> {
         let mut tx = self.db.begin().await?;
+        let select_span = tracing::info_span!(
+            "db.query",
+            otel.name = "sqlx.fetch_optional",
+            db.system = "postgresql",
+            db.operation = "SELECT",
+        );
         let row = sqlx::query!(
             r#"--sql
                 SELECT password_hash FROM users WHERE id = $1
@@ -129,6 +136,7 @@ impl UserRepository for UserRepositoryImpl {
             event.id as _
         )
         .fetch_optional(&mut *tx)
+        .instrument(select_span)
         .await
         .map_err(AppError::SqlExecuteError)?;
 
@@ -141,6 +149,12 @@ impl UserRepository for UserRepositoryImpl {
         }
 
         let new_password_hash = password::hash(&event.new_password)?;
+        let update_span = tracing::info_span!(
+            "db.query",
+            otel.name = "sqlx.execute",
+            db.system = "postgresql",
+            db.operation = "UPDATE",
+        );
         sqlx::query!(
             r#"--sql
                 UPDATE users SET password_hash = $1 WHERE id = $2
@@ -149,6 +163,7 @@ impl UserRepository for UserRepositoryImpl {
             event.id as _
         )
         .execute(&mut *tx)
+        .instrument(update_span)
         .await
         .map_err(AppError::SqlExecuteError)?;
 

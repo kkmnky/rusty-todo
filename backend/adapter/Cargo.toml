@@ -14,6 +14,8 @@ derive-new = { workspace = true }
 bcrypt = { workspace = true }
 chrono = { workspace = true }
 redis = { workspace = true }
+sqlx-tracing = { workspace = true }
+otel-instrumentation-redis = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true }
