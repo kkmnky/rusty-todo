@@ -176,7 +176,7 @@ fn init_telemetry() -> Result<TelemetryGuard> {
         Environment::Production => "prod",
     };
 
-    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| log_level.into());
+    let env_filter = build_env_filter(log_level)?;
     let log_format = select_log_format(&env);
 
     let otlp_endpoint = std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT")
@@ -232,6 +232,25 @@ fn init_telemetry() -> Result<TelemetryGuard> {
     global::set_tracer_provider(tracer_provider);
 
     Ok(TelemetryGuard)
+}
+
+fn build_env_filter(default_level: &str) -> Result<EnvFilter> {
+    let base = EnvFilter::try_from_default_env().unwrap_or_else(|_| default_level.into());
+
+    let suppress_opentelemetry_sdk_debug = "opentelemetry_sdk=info"
+        .parse()
+        .context("Failed to parse opentelemetry_sdk log directive")?;
+    let suppress_opentelemetry_debug = "opentelemetry=info"
+        .parse()
+        .context("Failed to parse opentelemetry log directive")?;
+    let suppress_span_processor_debug = "opentelemetry_sdk::trace::span_processor=info"
+        .parse()
+        .context("Failed to parse opentelemetry_sdk span processor log directive")?;
+
+    Ok(base
+        .add_directive(suppress_opentelemetry_sdk_debug)
+        .add_directive(suppress_opentelemetry_debug)
+        .add_directive(suppress_span_processor_debug))
 }
 
 #[derive(Clone, Copy)]

@@ -73,6 +73,7 @@ Rust 製の API/CLI サービス。本番用を見据え、レイヤード構成
 - ログ出力
   - `tracing-subscriber` を使う。
   - レベルは dev=`debug`, prod=`info`（`RUST_LOG` 優先）。
+  - ただし `opentelemetry_sdk` / `opentelemetry` は `info` 以上に固定し、`BatchSpanProcessor.ExportingDueToTimer` などの内部 DEBUG ノイズは抑制する。
   - 形式は dev=`pretty`, prod=`json`（`LOG_FORMAT=json|pretty` で切替）。
   - サンプリングは dev/prod ともに 100% とする（学習用途のため）。
   - HTTPアクセスログのイベントレベルは以下とする。

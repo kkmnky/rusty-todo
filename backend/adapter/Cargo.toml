@@ -16,6 +16,7 @@ chrono = { workspace = true }
 redis = { workspace = true }
 sqlx-tracing = { workspace = true }
 otel-instrumentation-redis = { workspace = true }
+tracing = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true }

@@ -142,7 +142,7 @@
      - [x] ユーザ削除のUsecase化（Usecase追加・API移行・回帰確認）
      - [x] 自分情報取得のUsecase化（Usecase追加・API移行・未存在はEntityNotFound）
      - [x] パスワード更新のUsecase化（Usecase追加・API移行・回帰確認）
-   - [ ] ログ出力の整備（共通のログ方針/出力の確認）
+   - [x] ログ出力の整備（共通のログ方針/出力の確認）
      - 方針詳細は `backend/README.md` の「ログ/トレース方針」を参照
      - 実装タスク（リクエスト/ログ基盤）
        - [x] `backend/src/bin/app.rs` に `SetRequestIdLayer` / `PropagateRequestIdLayer` / `TraceLayer` を組み込み、1リクエスト1spanを有効化
@@ -159,7 +159,7 @@
        - [x] `otel-instrumentation-redis` を組み込み、Redisスパンをトレースへ出力
        - [x] Redisログは `command` のみ出力し、key/value は非出力
      - 実装タスク（ノイズログ抑制）
-       - [ ] `BatchSpanProcessor.ExportingDueToTimer`（`opentelemetry_sdk` 内部 DEBUG ログ）が出力されないようにログフィルタを調整する
+       - [x] `BatchSpanProcessor.ExportingDueToTimer`（`opentelemetry_sdk` 内部 DEBUG ログ）が出力されないようにログフィルタを調整する
 8. [x] ユーザ用マイグレーションを作成・適用する: users テーブル、必要ならインデックス
 9. [x] ユーザ機能の動作確認をする: 統合テストまたは手動でサインアップ→ログイン→取得/更新/削除を確認
 10. [ ] Todo CRUD を実装する: ドメイン/ユースケース/リポジトリ/エンドポイント（`GET /todos`, `GET /todos/{id}`, `POST /todos`, `PUT /todos/{id}`, `DELETE /todos/{id}`）
@@ -178,14 +178,12 @@
       - [ ] リポジトリ実装（Todo 保存/検索、履歴管理）
       - [ ] ハンドラ/ルーター実装（上記エンドポイント）
       - [ ] 入力バリデーションとエラーハンドリング
-11. [ ] Todo 用マイグレーションを作成・適用する: todos テーブル（user_id FK, status, timestamps 等）
+11. [x] Todo 用マイグレーションを作成・適用する: todos テーブル（user_id FK, status, timestamps 等）
 12. [ ] Todo 機能の動作確認をする: 統合テストまたは手動で作成→一覧→更新→削除を確認
 13. [ ] テストを揃える: ユニット（ドメイン/ハッシュ/JWT）、統合（サインアップ→ログイン→Todo CRUD）、Lint/Format（`cargo fmt`, `cargo clippy`, `cargo test`）
-14. [ ] Frontend を初期化する: `frontend/` を Vite+React 等でセットアップし、eslint/prettier を設定
-15. [ ] Frontend 認証を作る: サインアップ/ログイン画面、JWT 保存と付与を実装
+14. [x] Frontend を初期化する: `frontend/` を Vite+React 等でセットアップし、eslint/prettier を設定
+15. [x] Frontend 認証を作る: サインアップ/ログイン画面、JWT 保存と付与を実装
 16. [ ] Frontend Todo UI を作る: 一覧/追加/編集/削除/完了トグル、API 連携と基本バリデーション
-17. [ ] ドキュメントを整える: README にセットアップ手順、環境変数例（`.env.example`）、主要コマンド、API エンドポイントを記載
-18. [ ] コンテナ動作を確認する: `docker compose up` で backend+db(+frontend) が起動することを確認
 
 ## 作業記録 (2026-01-13)
 
