@@ -56,12 +56,16 @@ Rust 製の API/CLI サービス。本番用を見据え、レイヤード構成
   - axum 向けに `tower_http::trace::TraceLayer` で 1 リクエスト 1 span とする。
   - `tracing-actix-web` は `actix-web` 専用のため不採用。
   - `SetRequestIdLayer` / `PropagateRequestIdLayer` を併用して request_id を扱う。
+  - span 名（`otel.name`）は `{METHOD} {path}`（例: `GET /api/v1/users/:user_id`）とする。
+  - `path` は `MatchedPath`（ルートテンプレート）を優先し、取得できない場合のみ実パスを使う。
   - span フィールドは `request_id` / `method` / `path` を含める。
   - レスポンス時に `status` / `latency_ms` を event 出力する。
   - 認証後は `user_id` を span に `record` する。
   - `X-Request-Id` 優先、無ければ UUID 生成。
 - DB/Redis 計装
   - DB は `sqlx-tracing` を本採用する。
+  - 通常クエリは `sqlx-tracing` の `Pool` 経由で計装する。
+  - トランザクションは SQLx 純正（`sqlx::Transaction`）で管理し、トランザクション内クエリは `db.query` span を明示的に付与する。
   - Redis は `otel-instrumentation-redis` を本採用する。
   - DB/Redis は通常時もトレース対象とし、機密情報とバインド値は出さない。
   - DB のバインド値は dev/prod ともに出力しない。
@@ -96,16 +100,3 @@ Rust 製の API/CLI サービス。本番用を見据え、レイヤード構成
   - `email` は平文で出力しない。
   - `attributes.user.email_masked` に `a***@example.com` 形式で出力する。
   - マスクルールはローカル部の先頭1文字のみ残し、以降は `*` とする。
-
-## 確認手順（Done条件）
-1. 1リクエストで `trace_id` が HTTP → DB → Redis まで同一で連携される。
-2. HTTPログに `request_id` / `method` / `path` / `status` / `latency_ms` が出る。
-3. 4xx は `warn`、5xx は `error` で出る。
-4. `error.kind` が `AppError` の enum 名で出る。
-5. `password` / `token` / `email` 平文が出ない。
-6. JSON必須キー（共通スキーマ）が全イベントで満たされる。
-
-## 今後のタスク
-- adapter 層に Postgres/Redis 実装とマイグレーション手順を追加。
-- api 層に Todo のエンドポイントと DTO を整備。
-- registry で依存配線をコード化し、テストも追加。
