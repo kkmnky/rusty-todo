@@ -6,7 +6,7 @@
 4. [x] Cargo 依存を追加する: `actix-web` `serde` `serde_json` `sqlx`(+postgres) `argon2` `jsonwebtoken` `chrono` `uuid` `config` `anyhow` `thiserror`
 5. [x] ドメインを定義する: User（id/name/email/password_hash/created_at/updated_at）、Todo（id/user_id/title/status/due?/created_at/updated_at）、Status(enum)
 6. [x] DB 基盤を整える: 接続設定（.env/config）、接続プール、`sqlx migrate` 初期化、ヘルスチェックエンドポイント
-7. [ ] ユーザ CRUD を実装する: ドメイン/ユースケース/リポジトリ/エンドポイント（例: `POST /auth/signup`, `POST /auth/login`, `GET/PUT/DELETE /users/{id}` 等）
+7. [x] ユーザ CRUD を実装する: ドメイン/ユースケース/リポジトリ/エンドポイント（例: `POST /auth/signup`, `POST /auth/login`, `GET/PUT/DELETE /users/{id}` 等）
    - エンドポイント（/api/v1 配下、rusty-book-manager と同一仕様）:
      | メソッド | パス | 説明 | 関数名 |
      | --- | --- | --- | --- |
@@ -126,7 +126,7 @@
         - [x] 不正JWTで401を返す
         - [x] 現在パスワード不一致で401を返す
         - [x] バリデーションエラーで400を返す
-7.5. [ ] リファクタリング
+7.5. [x] リファクタリング
    - [x] テスト方針を整理して段階的に移行する
      - [x] Adapter は `sqlx::test` を基本にする
      - [x] API は `rstest` を基本にする
@@ -162,35 +162,23 @@
        - [x] `BatchSpanProcessor.ExportingDueToTimer`（`opentelemetry_sdk` 内部 DEBUG ログ）が出力されないようにログフィルタを調整する
 8. [x] ユーザ用マイグレーションを作成・適用する: users テーブル、必要ならインデックス
 9. [x] ユーザ機能の動作確認をする: 統合テストまたは手動でサインアップ→ログイン→取得/更新/削除を確認
-10. [ ] Todo CRUD を実装する: ドメイン/ユースケース/リポジトリ/エンドポイント（`GET /todos`, `GET /todos/{id}`, `POST /todos`, `PUT /todos/{id}`, `DELETE /todos/{id}`）
-    - エンドポイント（/api/v1 配下、book API を Todo に読み替え）:
-      - GET `/todos`
-      - POST `/todos`
-      - GET `/todos/:todo_id`
-      - PUT `/todos/:todo_id`
-      - DELETE `/todos/:todo_id`
-      - GET `/todos/completed`（完了済み一覧。books/checkouts の一覧相当の補助ビュー）
-      - POST `/todos/:todo_id/complete`（完了アクション。books/:id/checkouts 相当）
-      - PUT `/todos/:todo_id/complete/:completion_id/reopen`（再オープン。returned 相当）
-      - GET `/todos/:todo_id/history`（状態遷移履歴。checkout-history 相当）
-    - サブタスク:
-      - [ ] ドメイン/ユースケースを定義（作成・取得・更新・削除・完了/再開・履歴）
-      - [ ] リポジトリ実装（Todo 保存/検索、履歴管理）
-      - [ ] ハンドラ/ルーター実装（上記エンドポイント）
-      - [ ] 入力バリデーションとエラーハンドリング
-11. [x] Todo 用マイグレーションを作成・適用する: todos テーブル（user_id FK, status, timestamps 等）
-12. [ ] Todo 機能の動作確認をする: 統合テストまたは手動で作成→一覧→更新→削除を確認
-13. [ ] テストを揃える: ユニット（ドメイン/ハッシュ/JWT）、統合（サインアップ→ログイン→Todo CRUD）、Lint/Format（`cargo fmt`, `cargo clippy`, `cargo test`）
-14. [x] Frontend を初期化する: `frontend/` を Vite+React 等でセットアップし、eslint/prettier を設定
-15. [x] Frontend 認証を作る: サインアップ/ログイン画面、JWT 保存と付与を実装
-16. [ ] Frontend Todo UI を作る: 一覧/追加/編集/削除/完了トグル、API 連携と基本バリデーション
-
-## 作業記録 (2026-01-13)
-
-- ユーザ追加の正常系テストを追加し、`register_user` の戻り値に 201 を含める形へ調整
-- ユーザ追加のAPIモデル（`RegisterUserRequest`/`UserResponse`）とハンドラ/ルートを追加
-- kernel に `User`/`CreateUser`/`UserId` と `UserRepository` を追加
-- `AppError` の `IntoResponse` を実装し、バリデーションは 400 のみ返す形に整理
-- タスク7の表とテストチェックボックスを最新化
-
-次: adapter と registry の実装
+10. [ ] Frontend「My Todos」の最低限ユースケースを実装する
+    - 目的:
+      - ログイン中ユーザが自分のTodoを日次管理できる最小機能に絞る
+    - 最低限ユースケース:
+      - [ ] Todoを追加する
+        - 入力はタイトル必須のみ（まずは最小）
+        - 追加成功後に一覧へ即時反映する
+      - [ ] 自分のTodo一覧を表示する
+        - 初期表示でTodo一覧を取得して表示する
+        - 0件時は空状態メッセージを表示する
+      - [ ] Todoの完了/未完了を切り替える
+        - 一覧上で1操作で状態更新できる
+      - [ ] Todoタイトルを編集する
+        - 既存タイトルを更新し、一覧へ反映する
+      - [ ] Todoを削除する
+        - 誤操作防止の確認後に削除し、一覧から除外する
+    - 画面状態（最低限）:
+      - [ ] 読み込み中表示
+      - [ ] 更新失敗時のエラー表示
+      - [ ] 空状態表示（Todoなし）
