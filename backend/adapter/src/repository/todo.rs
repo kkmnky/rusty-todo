@@ -61,6 +61,7 @@ mod tests {
         PgPool, Row,
         types::chrono::{DateTime, Utc},
     };
+    use shared::error::AppError;
     use std::str::FromStr;
 
     #[sqlx::test(fixtures("common"))]
@@ -98,5 +99,23 @@ mod tests {
         assert_eq!(persisted_title, todo.title);
         assert_eq!(persisted_completed, todo.completed);
         assert!(persisted_due_at.is_none());
+    }
+
+    #[sqlx::test]
+    async fn タスク作成は存在しないユーザidで失敗する(pool: PgPool) {
+        let pool = ConnectionPool::new(pool.clone());
+        let repo = TodoRepositoryImpl::new(pool.clone());
+        let event = CreateTodo {
+            title: "存在しないユーザのタスク".to_string(),
+            user_id: UserId::new(),
+            due_at: None,
+        };
+
+        let err = repo
+            .create(event)
+            .await
+            .expect_err("存在しないユーザIDでは失敗する");
+
+        assert!(matches!(err, AppError::SqlExecuteError(_)));
     }
 }
