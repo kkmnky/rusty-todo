@@ -4,6 +4,6 @@ use crate::model::id::UserId;
 
 pub struct CreateTodo {
     pub title: String,
-    pub user_id: UserId,
+    pub assignee_user_id: UserId,
     pub due_at: Option<DateTime<Utc>>,
 }

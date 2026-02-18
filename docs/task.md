@@ -171,16 +171,16 @@
         - 追加成功後に一覧へ即時反映する
         - テスト（Adapter → API）:
           - [x] テスト(Adapter): Todo追加 正常系
-            - [x] 作成成功し返却Todoの title/user_id/completed/due_at が一致する
+            - [x] 作成成功し返却Todoの title/assignee_user_id/completed/due_at が一致する
             - [x] todos に1件作成される
           - [x] テスト(Adapter): Todo追加 異常系
-            - [x] 存在しない user_id で作成すると SqlExecuteError になる
-          - [ ] テスト(API): `POST /api/v1/todos` 正常系
-          - [ ] テスト(API): `POST /api/v1/todos` 異常系
-            - [ ] title不正でValidationErrorになる
-            - [ ] Authorizationヘッダがないと401を返す
-            - [ ] 不正JWTで401を返す
-            - [ ] リポジトリ失敗でSqlExecuteErrorになる
+            - [x] 存在しない assignee_user_id で作成すると SqlExecuteError になる
+          - [x] テスト(API): `POST /api/v1/todos` 正常系
+          - [x] テスト(API): `POST /api/v1/todos` 異常系
+            - [x] title不正でValidationErrorになる
+            - [x] Authorizationヘッダがないと401を返す
+            - [x] 不正JWTで401を返す
+            - [x] リポジトリ失敗でSqlExecuteErrorになる
       - [ ] 自分のTodo一覧を表示する
         - 初期表示でTodo一覧を取得して表示する
         - 0件時は空状態メッセージを表示する

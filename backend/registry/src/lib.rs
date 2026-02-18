@@ -4,11 +4,15 @@ use adapter::{
     database::ConnectionPool,
     redis::RedisClient,
     repository::{
-        auth::AuthRepositoryImpl, health::HealthCheckRepositoryImpl, user::UserRepositoryImpl,
+        auth::AuthRepositoryImpl, health::HealthCheckRepositoryImpl, todo::TodoRepositoryImpl,
+        user::UserRepositoryImpl,
     },
 };
 use kernel::{
-    repository::{auth::AuthRepository, health::HealthCheckRepository, user::UserRepository},
+    repository::{
+        auth::AuthRepository, health::HealthCheckRepository, todo::TodoRepository,
+        user::UserRepository,
+    },
     service::jwt::JwtIssuer,
 };
 use shared::config::AppConfig;
@@ -19,6 +23,7 @@ pub struct AppRegistryImpl {
     pub user_repository: Arc<dyn UserRepository>,
     pub auth_repository: Arc<dyn AuthRepository>,
     pub jwt_issuer: Arc<JwtIssuer>,
+    pub todo_repository: Arc<dyn TodoRepository>,
 }
 
 impl AppRegistryImpl {
@@ -34,12 +39,14 @@ impl AppRegistryImpl {
             app_config.auth.jwt_secret,
             app_config.auth.ttl,
         ));
+        let todo_repository = Arc::new(TodoRepositoryImpl::new(pool.clone()));
 
         Self {
             health_check_repository,
             user_repository,
             auth_repository,
             jwt_issuer,
+            todo_repository,
         }
     }
 
@@ -58,6 +65,10 @@ impl AppRegistryImpl {
     pub fn jwt_issuer(&self) -> Arc<JwtIssuer> {
         self.jwt_issuer.clone()
     }
+
+    pub fn todo_repository(&self) -> Arc<dyn TodoRepository> {
+        self.todo_repository.clone()
+    }
 }
 
 #[mockall::automock]
@@ -66,6 +77,7 @@ pub trait AppRegistryExt {
     fn user_repository(&self) -> Arc<dyn UserRepository>;
     fn auth_repository(&self) -> Arc<dyn AuthRepository>;
     fn jwt_issuer(&self) -> Arc<JwtIssuer>;
+    fn todo_repository(&self) -> Arc<dyn TodoRepository>;
 }
 
 impl AppRegistryExt for AppRegistryImpl {
@@ -83,6 +95,10 @@ impl AppRegistryExt for AppRegistryImpl {
 
     fn jwt_issuer(&self) -> Arc<JwtIssuer> {
         self.jwt_issuer.clone()
+    }
+
+    fn todo_repository(&self) -> Arc<dyn TodoRepository> {
+        self.todo_repository.clone()
     }
 }
 

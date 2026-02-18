@@ -27,7 +27,7 @@ impl TodoRepository for TodoRepositoryImpl {
                 SELECT $1, $2, $3, $4, $5
             "#,
             todo_id as _,
-            event.user_id as _,
+            event.assignee_user_id as _,
             event.title,
             false,
             event.due_at,
@@ -44,7 +44,7 @@ impl TodoRepository for TodoRepositoryImpl {
 
         Ok(Todo {
             id: todo_id,
-            user_id: event.user_id,
+            assignee_user_id: event.assignee_user_id,
             title: event.title,
             completed: false,
             due_at: event.due_at,
@@ -57,11 +57,11 @@ mod tests {
     use super::*;
     use crate::database::ConnectionPool;
     use kernel::model::{id::UserId, todo::event::CreateTodo};
+    use shared::error::AppError;
     use sqlx::{
         PgPool, Row,
         types::chrono::{DateTime, Utc},
     };
-    use shared::error::AppError;
     use std::str::FromStr;
 
     #[sqlx::test(fixtures("common"))]
@@ -70,18 +70,18 @@ mod tests {
         let repo = TodoRepositoryImpl::new(pool.clone());
 
         let title = "テストタスク".to_string();
-        let user_id =
+        let assignee_user_id =
             UserId::from_str("75ef7d75-3b57-4f54-8e8e-fdb65738690c").expect("user_id取得");
         let event = CreateTodo {
             title: title.clone(),
-            user_id,
+            assignee_user_id,
             due_at: None,
         };
 
         let todo = repo.create(event).await.expect("作成が成功する");
 
         assert_eq!(todo.title, title);
-        assert_eq!(todo.user_id, user_id);
+        assert_eq!(todo.assignee_user_id, assignee_user_id);
         assert!(!todo.completed);
         assert!(todo.due_at.is_none());
 
@@ -90,12 +90,12 @@ mod tests {
             .fetch_one(pool.inner_ref())
             .await
             .expect("DBから取得できる");
-        let persisted_user_id: UserId = row.try_get("user_id").expect("user_id取得");
+        let persisted_assignee_user_id: UserId = row.try_get("user_id").expect("user_id取得");
         let persisted_title: String = row.try_get("title").expect("title取得");
         let persisted_completed: bool = row.try_get("completed").expect("completed取得");
         let persisted_due_at: Option<DateTime<Utc>> = row.try_get("due_at").expect("due_at取得");
 
-        assert_eq!(persisted_user_id, user_id);
+        assert_eq!(persisted_assignee_user_id, assignee_user_id);
         assert_eq!(persisted_title, todo.title);
         assert_eq!(persisted_completed, todo.completed);
         assert!(persisted_due_at.is_none());
@@ -107,7 +107,7 @@ mod tests {
         let repo = TodoRepositoryImpl::new(pool.clone());
         let event = CreateTodo {
             title: "存在しないユーザのタスク".to_string(),
-            user_id: UserId::new(),
+            assignee_user_id: UserId::new(),
             due_at: None,
         };
 
