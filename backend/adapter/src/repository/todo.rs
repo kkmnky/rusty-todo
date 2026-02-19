@@ -2,14 +2,14 @@ use async_trait::async_trait;
 use derive_new::new;
 use kernel::{
     model::{
-        id::TodoId,
+        id::{TodoId, UserId},
         todo::{Todo, event::CreateTodo},
     },
     repository::todo::TodoRepository,
 };
 use shared::error::{AppError, AppResult};
 
-use crate::database::ConnectionPool;
+use crate::database::{ConnectionPool, model::todo::TodoRow};
 
 #[derive(new)]
 pub struct TodoRepositoryImpl {
@@ -50,13 +50,46 @@ impl TodoRepository for TodoRepositoryImpl {
             due_at: event.due_at,
         })
     }
+
+    async fn find_by_user_id(&self, user_id: UserId) -> AppResult<Vec<Todo>> {
+        let rows = sqlx::query_as!(
+            TodoRow,
+            r#"--sql
+                SELECT
+                    id,
+                    user_id,
+                    title,
+                    completed,
+                    due_at,
+                    created_at,
+                    updated_at
+                FROM todos
+                WHERE user_id = $1
+                ORDER BY created_at DESC
+            "#,
+            user_id as _,
+        )
+        .fetch_all(self.db.inner_ref())
+        .await
+        .map_err(AppError::SqlExecuteError)?;
+
+        let todos = rows
+            .into_iter()
+            .map(Todo::try_from)
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(todos)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::database::ConnectionPool;
-    use kernel::model::{id::UserId, todo::event::CreateTodo};
+    use kernel::model::{
+        id::{TodoId, UserId},
+        todo::event::CreateTodo,
+    };
     use shared::error::AppError;
     use sqlx::{
         PgPool, Row,
@@ -117,5 +150,47 @@ mod tests {
             .expect_err("存在しないユーザIDでは失敗する");
 
         assert!(matches!(err, AppError::SqlExecuteError(_)));
+    }
+
+    #[sqlx::test(fixtures("common", "todo"))]
+    async fn 自分のタスク一覧をuser_idで取得できる(pool: PgPool) {
+        let pool = ConnectionPool::new(pool.clone());
+        let repo = TodoRepositoryImpl::new(pool.clone());
+        let target_user_id =
+            UserId::from_str("75ef7d75-3b57-4f54-8e8e-fdb65738690c").expect("user_id取得");
+        let target_old_todo_id: TodoId = "10f0d6f2-c464-4f4c-92f0-6d87f7324f11"
+            .parse()
+            .expect("todo_id取得");
+        let target_new_todo_id: TodoId = "67d4895c-b538-4c81-846d-c3f08d41ecbe"
+            .parse()
+            .expect("todo_id取得");
+
+        let todos = repo
+            .find_by_user_id(target_user_id)
+            .await
+            .expect("一覧取得が成功する");
+
+        assert_eq!(todos.len(), 2);
+        assert_eq!(todos[0].id, target_new_todo_id);
+        assert_eq!(todos[0].title, "target-new");
+        assert_eq!(todos[0].assignee_user_id, target_user_id);
+        assert_eq!(todos[1].id, target_old_todo_id);
+        assert_eq!(todos[1].title, "target-old");
+        assert_eq!(todos[1].assignee_user_id, target_user_id);
+    }
+
+    #[sqlx::test(fixtures("common"))]
+    async fn 自分のタスク一覧取得は対象なしで空配列を返す(pool: PgPool) {
+        let pool = ConnectionPool::new(pool.clone());
+        let repo = TodoRepositoryImpl::new(pool.clone());
+        let target_user_id =
+            UserId::from_str("75ef7d75-3b57-4f54-8e8e-fdb65738690c").expect("user_id取得");
+
+        let todos = repo
+            .find_by_user_id(target_user_id)
+            .await
+            .expect("一覧取得が成功する");
+
+        assert!(todos.is_empty());
     }
 }
