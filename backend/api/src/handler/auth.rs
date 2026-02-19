@@ -102,7 +102,7 @@ pub(crate) fn extract_bearer(headers: &HeaderMap) -> AppResult<AccessToken> {
 #[cfg(test)]
 mod tests {
     use super::{auth_login, auth_logout};
-    use crate::handler::test_support::{build_auth_header, build_test_jwt_issuer};
+    use crate::handler::test_support::{build_auth_header, build_registry_with_jwt};
     use axum::{
         Json,
         extract::State,
@@ -113,24 +113,18 @@ mod tests {
         id::UserId,
     };
     use kernel::repository::auth::{AuthRepository, MockAuthRepository};
-    use kernel::service::{jwt::JwtIssuer, password};
+    use kernel::service::password;
     use registry::{AppRegistry, MockAppRegistryExt};
-    use rstest::{fixture, rstest};
+    use rstest::rstest;
     use shared::error::AppError;
     use std::sync::Arc;
 
     use crate::model::auth::LoginRequest;
 
-    #[fixture]
-    fn jwt_issuer() -> Arc<JwtIssuer> {
-        build_test_jwt_issuer()
-    }
-
     #[rstest]
     #[tokio::test]
-    async fn ログインは200とアクセストークンと期限を返す(
-        jwt_issuer: Arc<JwtIssuer>,
-    ) {
+    async fn ログインは200とアクセストークンと期限を返す() {
+        let (mut registry, _jwt_issuer) = build_registry_with_jwt();
         let user_id = UserId::new();
         let email = "alice@example.com".to_string();
         let password = "password123".to_string();
@@ -156,14 +150,10 @@ mod tests {
             .withf(move |event| event.user_id == user_id && !event.access_token.0.is_empty())
             .returning(move |_| Ok(stored_token_for_return.clone()));
 
-        let mut registry = MockAppRegistryExt::new();
         let repo_arc: Arc<dyn AuthRepository> = Arc::new(repo);
         registry
             .expect_auth_repository()
             .return_const(repo_arc.clone());
-        registry
-            .expect_jwt_issuer()
-            .return_const(jwt_issuer.clone());
 
         let registry: AppRegistry = Arc::new(registry);
         let req = LoginRequest::new(email, password);
@@ -179,7 +169,8 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
-    async fn パスワード不一致で401を返す(jwt_issuer: Arc<JwtIssuer>) {
+    async fn パスワード不一致で401を返す() {
+        let (mut registry, _jwt_issuer) = build_registry_with_jwt();
         let user_id = UserId::new();
         let email = "alice@example.com".to_string();
         let password = "password123".to_string();
@@ -201,14 +192,10 @@ mod tests {
 
         repo.expect_store_token().times(0);
 
-        let mut registry = MockAppRegistryExt::new();
         let repo_arc: Arc<dyn AuthRepository> = Arc::new(repo);
         registry
             .expect_auth_repository()
             .return_const(repo_arc.clone());
-        registry
-            .expect_jwt_issuer()
-            .return_const(jwt_issuer.clone());
 
         let registry: AppRegistry = Arc::new(registry);
         let req = LoginRequest::new(email, "wrong-password".to_string());
@@ -222,20 +209,17 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
-    async fn メールアドレスが存在しないで401を返す(jwt_issuer: Arc<JwtIssuer>) {
+    async fn メールアドレスが存在しないで401を返す() {
+        let (mut registry, _jwt_issuer) = build_registry_with_jwt();
         let mut repo = MockAuthRepository::new();
         repo.expect_find_by_email().returning(move |_| Ok(None));
 
         repo.expect_store_token().times(0);
 
-        let mut registry = MockAppRegistryExt::new();
         let repo_arc: Arc<dyn AuthRepository> = Arc::new(repo);
         registry
             .expect_auth_repository()
             .return_const(repo_arc.clone());
-        registry
-            .expect_jwt_issuer()
-            .return_const(jwt_issuer.clone());
 
         let registry: AppRegistry = Arc::new(registry);
 

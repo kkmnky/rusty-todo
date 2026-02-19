@@ -1,10 +1,34 @@
 use axum::http::{HeaderMap, HeaderValue, header::AUTHORIZATION};
 use kernel::model::id::UserId;
 use kernel::service::jwt::JwtIssuer;
+#[cfg(test)]
+use registry::MockAppRegistryExt;
 use std::sync::Arc;
 
-pub fn build_test_jwt_issuer() -> Arc<JwtIssuer> {
-    Arc::new(JwtIssuer::new("test-secret".to_string(), 60_u64 * 60 * 24))
+#[cfg(test)]
+pub fn build_registry_with_jwt() -> (MockAppRegistryExt, Arc<JwtIssuer>) {
+    let jwt_issuer = Arc::new(JwtIssuer::new("test-secret".to_string(), 60_u64 * 60 * 24));
+    let mut registry = MockAppRegistryExt::new();
+    registry
+        .expect_jwt_issuer()
+        .return_const(jwt_issuer.clone());
+    (registry, jwt_issuer)
+}
+
+#[cfg(test)]
+pub fn build_registry_with_valid_auth() -> (MockAppRegistryExt, HeaderMap) {
+    let (registry, jwt_issuer) = build_registry_with_jwt();
+    let headers = build_valid_auth_header(&jwt_issuer);
+    (registry, headers)
+}
+
+#[cfg(test)]
+pub fn build_registry_with_auth_for_user(
+    user_id: UserId,
+) -> (MockAppRegistryExt, HeaderMap) {
+    let (registry, jwt_issuer) = build_registry_with_jwt();
+    let headers = build_auth_header_for_user(&jwt_issuer, user_id);
+    (registry, headers)
 }
 
 pub fn build_auth_header(token: &str) -> HeaderMap {
