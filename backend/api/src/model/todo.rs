@@ -38,6 +38,11 @@ impl From<Todo> for TodoResponse {
     }
 }
 
+#[derive(Debug, Serialize)]
+pub struct TodosResponse {
+    pub items: Vec<TodoResponse>,
+}
+
 #[derive(Deserialize, Validate, new)]
 #[serde(rename_all = "camelCase")]
 pub struct RegisterTodoRequest {

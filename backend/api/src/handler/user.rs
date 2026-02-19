@@ -100,7 +100,8 @@ pub async fn change_password(
 mod tests {
     use super::*;
     use crate::handler::test_support::{
-        build_auth_header, build_auth_header_for_user, build_valid_auth_header,
+        build_auth_header, build_auth_header_for_user, build_test_jwt_issuer,
+        build_valid_auth_header,
     };
     use axum::{
         extract::{Path, State},
@@ -118,7 +119,7 @@ mod tests {
 
     #[fixture]
     fn jwt_issuer() -> Arc<JwtIssuer> {
-        Arc::new(JwtIssuer::new("test-secret".to_string(), 60_u64 * 60))
+        build_test_jwt_issuer()
     }
 
     #[rstest]

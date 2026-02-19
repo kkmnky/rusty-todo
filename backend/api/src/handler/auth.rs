@@ -102,7 +102,7 @@ pub(crate) fn extract_bearer(headers: &HeaderMap) -> AppResult<AccessToken> {
 #[cfg(test)]
 mod tests {
     use super::{auth_login, auth_logout};
-    use crate::handler::test_support::build_auth_header;
+    use crate::handler::test_support::{build_auth_header, build_test_jwt_issuer};
     use axum::{
         Json,
         extract::State,
@@ -123,7 +123,7 @@ mod tests {
 
     #[fixture]
     fn jwt_issuer() -> Arc<JwtIssuer> {
-        Arc::new(JwtIssuer::new("test-secret".to_string(), 60_u64 * 60 * 24))
+        build_test_jwt_issuer()
     }
 
     #[rstest]

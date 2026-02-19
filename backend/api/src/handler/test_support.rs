@@ -1,6 +1,11 @@
 use axum::http::{HeaderMap, HeaderValue, header::AUTHORIZATION};
 use kernel::model::id::UserId;
 use kernel::service::jwt::JwtIssuer;
+use std::sync::Arc;
+
+pub fn build_test_jwt_issuer() -> Arc<JwtIssuer> {
+    Arc::new(JwtIssuer::new("test-secret".to_string(), 60_u64 * 60 * 24))
+}
 
 pub fn build_auth_header(token: &str) -> HeaderMap {
     let mut headers = HeaderMap::new();

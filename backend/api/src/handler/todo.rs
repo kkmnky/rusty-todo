@@ -4,13 +4,13 @@ use axum::{
     http::{HeaderMap, StatusCode},
 };
 use garde::Validate;
-use kernel::usecase::todo::register::RegisterTodoUsecase;
+use kernel::usecase::todo::{list_my_todos::ListMyTodosUsecase, register::RegisterTodoUsecase};
 use registry::AppRegistry;
 use shared::error::AppResult;
 
 use crate::{
     handler::auth::require_auth,
-    model::todo::{RegisterTodoRequest, TodoResponse},
+    model::todo::{RegisterTodoRequest, TodoResponse, TodosResponse},
 };
 
 pub async fn register_todo(
@@ -27,12 +27,37 @@ pub async fn register_todo(
     Ok((StatusCode::CREATED, Json(registered_user.into())))
 }
 
+pub async fn list_my_todos(
+    State(registry): State<AppRegistry>,
+    headers: HeaderMap,
+) -> AppResult<(StatusCode, Json<TodosResponse>)> {
+    let verified_token = require_auth(&registry, &headers)?;
+    let user_id = verified_token.sub;
+
+    let usecase = ListMyTodosUsecase::new(registry.todo_repository());
+    let items = usecase
+        .execute(user_id)
+        .await?
+        .into_iter()
+        .map(TodoResponse::from)
+        .collect();
+
+    Ok((StatusCode::OK, Json(TodosResponse { items })))
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::handler::test_support::build_valid_auth_header;
+    use crate::handler::test_support::{
+        build_auth_header, build_auth_header_for_user, build_test_jwt_issuer,
+        build_valid_auth_header,
+    };
 
     use super::*;
-    use axum::{Json, extract::State, http::StatusCode};
+    use axum::{
+        Json,
+        extract::State,
+        http::{HeaderMap, StatusCode},
+    };
     use kernel::{
         model::{
             id::{TodoId, UserId},
@@ -48,7 +73,7 @@ mod tests {
 
     #[fixture]
     fn jwt_issuer() -> Arc<JwtIssuer> {
-        Arc::new(JwtIssuer::new("test-secret".to_string(), 60_u64 * 60))
+        build_test_jwt_issuer()
     }
 
     #[rstest]
@@ -137,5 +162,156 @@ mod tests {
             .expect_err("リポジトリ失敗はエラーになる");
 
         assert!(matches!(err, AppError::SqlExecuteError(_)));
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn 自分のタスク一覧は200とitemsを返す(jwt_issuer: Arc<JwtIssuer>) {
+        let user_id = UserId::new();
+        let expected_todo_id = TodoId::new();
+        let mut repo = MockTodoRepository::new();
+        repo.expect_find_by_user_id()
+            .withf(move |value| *value == user_id)
+            .returning(move |assignee_user_id| {
+                Ok(vec![Todo {
+                    id: expected_todo_id,
+                    assignee_user_id,
+                    title: "自分のタスク".to_string(),
+                    completed: false,
+                    due_at: None,
+                }])
+            });
+
+        let mut registry = MockAppRegistryExt::new();
+        let repo_arc: Arc<dyn TodoRepository> = Arc::new(repo);
+        registry.expect_todo_repository().return_const(repo_arc);
+        registry
+            .expect_jwt_issuer()
+            .return_const(jwt_issuer.clone());
+
+        let registry: AppRegistry = Arc::new(registry);
+        let headers = build_auth_header_for_user(&jwt_issuer, user_id);
+
+        let (status, Json(body)) = list_my_todos(State(registry), headers)
+            .await
+            .expect("正常系は成功を期待する");
+
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body.items.len(), 1);
+        assert_eq!(body.items[0].id, expected_todo_id);
+        assert_eq!(body.items[0].assignee_user_id, user_id);
+        assert_eq!(body.items[0].title, "自分のタスク");
+        assert!(!body.items[0].completed);
+        assert!(body.items[0].due_at.is_none());
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn 自分のタスク一覧はjwtのsubで取得する(jwt_issuer: Arc<JwtIssuer>) {
+        let user_id = UserId::new();
+        let mut repo = MockTodoRepository::new();
+        repo.expect_find_by_user_id()
+            .withf(move |value| *value == user_id)
+            .times(1)
+            .returning(move |assignee_user_id| {
+                Ok(vec![Todo {
+                    id: TodoId::new(),
+                    assignee_user_id,
+                    title: "sub-user-todo".to_string(),
+                    completed: false,
+                    due_at: None,
+                }])
+            });
+
+        let mut registry = MockAppRegistryExt::new();
+        let repo_arc: Arc<dyn TodoRepository> = Arc::new(repo);
+        registry.expect_todo_repository().return_const(repo_arc);
+        registry
+            .expect_jwt_issuer()
+            .return_const(jwt_issuer.clone());
+
+        let registry: AppRegistry = Arc::new(registry);
+        let headers = build_auth_header_for_user(&jwt_issuer, user_id);
+
+        let (status, Json(body)) = list_my_todos(State(registry), headers)
+            .await
+            .expect("正常系は成功を期待する");
+
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body.items.len(), 1);
+        assert_eq!(body.items[0].assignee_user_id, user_id);
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn 自分のタスク一覧は0件でも200と空配列を返す(
+        jwt_issuer: Arc<JwtIssuer>,
+    ) {
+        let user_id = UserId::new();
+        let mut repo = MockTodoRepository::new();
+        repo.expect_find_by_user_id()
+            .withf(move |value| *value == user_id)
+            .returning(|_| Ok(vec![]));
+
+        let mut registry = MockAppRegistryExt::new();
+        let repo_arc: Arc<dyn TodoRepository> = Arc::new(repo);
+        registry.expect_todo_repository().return_const(repo_arc);
+        registry
+            .expect_jwt_issuer()
+            .return_const(jwt_issuer.clone());
+
+        let registry: AppRegistry = Arc::new(registry);
+        let headers = build_auth_header_for_user(&jwt_issuer, user_id);
+
+        let (status, Json(body)) = list_my_todos(State(registry), headers)
+            .await
+            .expect("正常系は成功を期待する");
+
+        assert_eq!(status, StatusCode::OK);
+        assert!(body.items.is_empty());
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn 自分のタスク一覧はauthorizationヘッダがないと401を返す() {
+        let mut repo = MockTodoRepository::new();
+        repo.expect_find_by_user_id().times(0);
+
+        let mut registry = MockAppRegistryExt::new();
+        let repo_arc: Arc<dyn TodoRepository> = Arc::new(repo);
+        registry.expect_todo_repository().return_const(repo_arc);
+        let registry: AppRegistry = Arc::new(registry);
+        let headers = HeaderMap::new();
+
+        let err = list_my_todos(State(registry), headers)
+            .await
+            .expect_err("Authorizationヘッダなしは401を期待する");
+
+        assert!(matches!(err, AppError::Unauthorized(_)));
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn 自分のタスク一覧は不正jwtで401を返す(jwt_issuer: Arc<JwtIssuer>) {
+        let mut repo = MockTodoRepository::new();
+        repo.expect_find_by_user_id().times(0);
+
+        let mut registry = MockAppRegistryExt::new();
+        let repo_arc: Arc<dyn TodoRepository> = Arc::new(repo);
+        registry.expect_todo_repository().return_const(repo_arc);
+        registry
+            .expect_jwt_issuer()
+            .return_const(jwt_issuer.clone());
+
+        let registry: AppRegistry = Arc::new(registry);
+        let wrong_issuer = JwtIssuer::new("wrong-secret".to_string(), 60_u64 * 60);
+        let wrong_token = wrong_issuer.issue_token(UserId::new()).expect("jwt生成");
+        let headers = build_auth_header(&wrong_token.0);
+
+        let err = list_my_todos(State(registry), headers)
+            .await
+            .expect_err("不正JWTは401を期待する");
+
+        assert!(matches!(err, AppError::Unauthorized(_)));
     }
 }
