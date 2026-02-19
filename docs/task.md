@@ -200,6 +200,26 @@
             - [x] 不正JWTで401を返す
       - [ ] Todoの完了/未完了を切り替える
         - 一覧上で1操作で状態更新できる
+        - 仕様:
+          - `PATCH /api/v1/todos/{todo_id}/completed`
+          - リクエストボディは `{"completed": true | false}`
+          - 認証済みなら自分以外のTodoも更新可能（現時点）
+          - 成功時は `204 No Content`
+        - テスト（Adapter → API）:
+          - [x] テスト(Adapter): Todo完了状態更新 正常系
+            - [x] `completed: false` から `true` に更新できる
+            - [x] `completed: true` から `false` に更新できる
+          - [x] テスト(Adapter): Todo完了状態更新 異常系
+            - [x] 存在しない `todo_id` で `EntityNotFoundError` になる
+          - [ ] テスト(API): `PATCH /api/v1/todos/{todo_id}/completed` 正常系
+            - [ ] `completed: true` で204を返す
+            - [ ] `completed: false` で204を返す
+          - [ ] テスト(API): `PATCH /api/v1/todos/{todo_id}/completed` 異常系
+            - [ ] Authorizationヘッダがないと401を返す
+            - [ ] 不正JWTで401を返す
+            - [ ] 不正な `todo_id` で400を返す
+            - [ ] 不正なリクエストボディで400を返す
+            - [ ] 存在しない `todo_id` で404を返す
       - [ ] Todoタイトルを編集する
         - 既存タイトルを更新し、一覧へ反映する
       - [ ] Todoを削除する

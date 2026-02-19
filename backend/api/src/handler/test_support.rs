@@ -23,9 +23,7 @@ pub fn build_registry_with_valid_auth() -> (MockAppRegistryExt, HeaderMap) {
 }
 
 #[cfg(test)]
-pub fn build_registry_with_auth_for_user(
-    user_id: UserId,
-) -> (MockAppRegistryExt, HeaderMap) {
+pub fn build_registry_with_auth_for_user(user_id: UserId) -> (MockAppRegistryExt, HeaderMap) {
     let (registry, jwt_issuer) = build_registry_with_jwt();
     let headers = build_auth_header_for_user(&jwt_issuer, user_id);
     (registry, headers)

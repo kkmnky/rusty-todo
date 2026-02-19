@@ -80,6 +80,27 @@ impl TodoRepository for TodoRepositoryImpl {
 
         Ok(todos)
     }
+
+    async fn update_completed(&self, todo_id: TodoId, completed: bool) -> AppResult<()> {
+        let res = sqlx::query!(
+            r#"--sql
+                UPDATE todos SET completed = $1 WHERE id = $2
+            "#,
+            completed,
+            todo_id as _,
+        )
+        .execute(self.db.inner_ref())
+        .await
+        .map_err(AppError::SqlExecuteError)?;
+
+        if res.rows_affected() == 0 {
+            return Err(AppError::EntityNotFoundError(
+                "No todo has been updated".into(),
+            ));
+        }
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -192,5 +213,68 @@ mod tests {
             .expect("一覧取得が成功する");
 
         assert!(todos.is_empty());
+    }
+
+    #[sqlx::test(fixtures("common", "todo"))]
+    async fn タスク完了状態を未完了から完了に更新できる(pool: PgPool) {
+        let pool = ConnectionPool::new(pool.clone());
+        let repo = TodoRepositoryImpl::new(pool.clone());
+        let target_todo_id: TodoId = "10f0d6f2-c464-4f4c-92f0-6d87f7324f11"
+            .parse()
+            .expect("todo_id取得");
+
+        repo.update_completed(target_todo_id, true)
+            .await
+            .expect("更新が成功する");
+
+        let row = sqlx::query("SELECT completed FROM todos WHERE id = $1")
+            .bind(target_todo_id)
+            .fetch_one(pool.inner_ref())
+            .await
+            .expect("DBから取得できる");
+        let completed: bool = row.try_get("completed").expect("completed取得");
+
+        assert!(completed);
+    }
+
+    #[sqlx::test(fixtures("common", "todo"))]
+    async fn タスク完了状態を完了から未完了に更新できる(pool: PgPool) {
+        let pool = ConnectionPool::new(pool.clone());
+        let repo = TodoRepositoryImpl::new(pool.clone());
+        let target_todo_id: TodoId = "67d4895c-b538-4c81-846d-c3f08d41ecbe"
+            .parse()
+            .expect("todo_id取得");
+
+        sqlx::query("UPDATE todos SET completed = true WHERE id = $1")
+            .bind(target_todo_id)
+            .execute(pool.inner_ref())
+            .await
+            .expect("初期状態を完了にできる");
+
+        repo.update_completed(target_todo_id, false)
+            .await
+            .expect("更新が成功する");
+
+        let row = sqlx::query("SELECT completed FROM todos WHERE id = $1")
+            .bind(target_todo_id)
+            .fetch_one(pool.inner_ref())
+            .await
+            .expect("DBから取得できる");
+        let completed: bool = row.try_get("completed").expect("completed取得");
+
+        assert!(!completed);
+    }
+
+    #[sqlx::test(fixtures("common"))]
+    async fn タスク完了状態更新は存在しないtodo_idで失敗する(pool: PgPool) {
+        let pool = ConnectionPool::new(pool.clone());
+        let repo = TodoRepositoryImpl::new(pool.clone());
+
+        let err = repo
+            .update_completed(TodoId::new(), true)
+            .await
+            .expect_err("存在しないtodo_idでは失敗する");
+
+        assert!(matches!(err, AppError::EntityNotFoundError(_)));
     }
 }
