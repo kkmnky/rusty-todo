@@ -3,7 +3,10 @@ use derive_new::new;
 use kernel::{
     model::{
         id::{TodoId, UserId},
-        todo::{Todo, event::CreateTodo},
+        todo::{
+            Todo,
+            event::{CreateTodo, UpdateTodoCompleted},
+        },
     },
     repository::todo::TodoRepository,
 };
@@ -81,25 +84,33 @@ impl TodoRepository for TodoRepositoryImpl {
         Ok(todos)
     }
 
-    async fn update_completed(&self, todo_id: TodoId, completed: bool) -> AppResult<()> {
-        let res = sqlx::query!(
+    async fn update_completed(&self, event: UpdateTodoCompleted) -> AppResult<Todo> {
+        let row = sqlx::query_as!(
+            TodoRow,
             r#"--sql
-                UPDATE todos SET completed = $1 WHERE id = $2
+                UPDATE todos
+                SET completed = $1
+                WHERE id = $2
+                RETURNING
+                    id,
+                    user_id,
+                    title,
+                    completed,
+                    due_at,
+                    created_at,
+                    updated_at
             "#,
-            completed,
-            todo_id as _,
+            event.completed,
+            event.id as _,
         )
-        .execute(self.db.inner_ref())
+        .fetch_optional(self.db.inner_ref())
         .await
-        .map_err(AppError::SqlExecuteError)?;
+        .map_err(AppError::SqlExecuteError)?
+        .ok_or_else(|| AppError::EntityNotFoundError("No todo has been updated".into()))?;
 
-        if res.rows_affected() == 0 {
-            return Err(AppError::EntityNotFoundError(
-                "No todo has been updated".into(),
-            ));
-        }
+        let todo = Todo::try_from(row)?;
 
-        Ok(())
+        Ok(todo)
     }
 }
 
@@ -222,19 +233,36 @@ mod tests {
         let target_todo_id: TodoId = "10f0d6f2-c464-4f4c-92f0-6d87f7324f11"
             .parse()
             .expect("todo_id取得");
+        let target_user_id: UserId = "75ef7d75-3b57-4f54-8e8e-fdb65738690c"
+            .parse()
+            .expect("user_id取得");
+        let event = UpdateTodoCompleted {
+            id: target_todo_id,
+            completed: true,
+        };
 
-        repo.update_completed(target_todo_id, true)
-            .await
-            .expect("更新が成功する");
+        let updated_todo = repo.update_completed(event).await.expect("更新が成功する");
 
-        let row = sqlx::query("SELECT completed FROM todos WHERE id = $1")
+        assert_eq!(updated_todo.id, target_todo_id);
+        assert_eq!(updated_todo.assignee_user_id, target_user_id);
+        assert_eq!(updated_todo.title, "target-old");
+        assert!(updated_todo.completed);
+        assert!(updated_todo.due_at.is_none());
+
+        let row = sqlx::query("SELECT user_id, title, completed, due_at FROM todos WHERE id = $1")
             .bind(target_todo_id)
             .fetch_one(pool.inner_ref())
             .await
             .expect("DBから取得できる");
-        let completed: bool = row.try_get("completed").expect("completed取得");
+        let persisted_assignee_user_id: UserId = row.try_get("user_id").expect("user_id取得");
+        let persisted_title: String = row.try_get("title").expect("title取得");
+        let persisted_completed: bool = row.try_get("completed").expect("completed取得");
+        let persisted_due_at: Option<DateTime<Utc>> = row.try_get("due_at").expect("due_at取得");
 
-        assert!(completed);
+        assert_eq!(persisted_assignee_user_id, updated_todo.assignee_user_id);
+        assert_eq!(persisted_title, updated_todo.title);
+        assert_eq!(persisted_completed, updated_todo.completed);
+        assert_eq!(persisted_due_at, updated_todo.due_at);
     }
 
     #[sqlx::test(fixtures("common", "todo"))]
@@ -244,6 +272,9 @@ mod tests {
         let target_todo_id: TodoId = "67d4895c-b538-4c81-846d-c3f08d41ecbe"
             .parse()
             .expect("todo_id取得");
+        let target_user_id: UserId = "75ef7d75-3b57-4f54-8e8e-fdb65738690c"
+            .parse()
+            .expect("user_id取得");
 
         sqlx::query("UPDATE todos SET completed = true WHERE id = $1")
             .bind(target_todo_id)
@@ -251,18 +282,32 @@ mod tests {
             .await
             .expect("初期状態を完了にできる");
 
-        repo.update_completed(target_todo_id, false)
-            .await
-            .expect("更新が成功する");
+        let event = UpdateTodoCompleted {
+            id: target_todo_id,
+            completed: false,
+        };
+        let updated_todo = repo.update_completed(event).await.expect("更新が成功する");
 
-        let row = sqlx::query("SELECT completed FROM todos WHERE id = $1")
+        assert_eq!(updated_todo.id, target_todo_id);
+        assert_eq!(updated_todo.assignee_user_id, target_user_id);
+        assert_eq!(updated_todo.title, "target-new");
+        assert!(!updated_todo.completed);
+        assert!(updated_todo.due_at.is_none());
+
+        let row = sqlx::query("SELECT user_id, title, completed, due_at FROM todos WHERE id = $1")
             .bind(target_todo_id)
             .fetch_one(pool.inner_ref())
             .await
             .expect("DBから取得できる");
-        let completed: bool = row.try_get("completed").expect("completed取得");
+        let persisted_assignee_user_id: UserId = row.try_get("user_id").expect("user_id取得");
+        let persisted_title: String = row.try_get("title").expect("title取得");
+        let persisted_completed: bool = row.try_get("completed").expect("completed取得");
+        let persisted_due_at: Option<DateTime<Utc>> = row.try_get("due_at").expect("due_at取得");
 
-        assert!(!completed);
+        assert_eq!(persisted_assignee_user_id, updated_todo.assignee_user_id);
+        assert_eq!(persisted_title, updated_todo.title);
+        assert_eq!(persisted_completed, updated_todo.completed);
+        assert_eq!(persisted_due_at, updated_todo.due_at);
     }
 
     #[sqlx::test(fixtures("common"))]
@@ -270,8 +315,12 @@ mod tests {
         let pool = ConnectionPool::new(pool.clone());
         let repo = TodoRepositoryImpl::new(pool.clone());
 
+        let event = UpdateTodoCompleted {
+            id: TodoId::new(),
+            completed: true,
+        };
         let err = repo
-            .update_completed(TodoId::new(), true)
+            .update_completed(event)
             .await
             .expect_err("存在しないtodo_idでは失敗する");
 

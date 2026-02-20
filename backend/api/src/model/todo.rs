@@ -68,3 +68,9 @@ impl From<RegisterTodoRequest> for RegisterTodoInput {
         }
     }
 }
+
+#[derive(Deserialize, new)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateTodoCompletedRequest {
+    pub completed: bool,
+}

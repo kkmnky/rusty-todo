@@ -1,16 +1,23 @@
 use axum::{
     Json,
-    extract::State,
+    extract::{Path, State},
     http::{HeaderMap, StatusCode},
 };
 use garde::Validate;
-use kernel::usecase::todo::{list_my_todos::ListMyTodosUsecase, register::RegisterTodoUsecase};
+use kernel::{
+    model::id::TodoId,
+    usecase::todo::{
+        list_my_todos::ListMyTodosUsecase,
+        register::RegisterTodoUsecase,
+        update_completed::{UpdateTodoCompletedInput, UpdateTodoCompletedUsecase},
+    },
+};
 use registry::AppRegistry;
 use shared::error::AppResult;
 
 use crate::{
     handler::auth::require_auth,
-    model::todo::{RegisterTodoRequest, TodoResponse, TodosResponse},
+    model::todo::{RegisterTodoRequest, TodoResponse, TodosResponse, UpdateTodoCompletedRequest},
 };
 
 pub async fn register_todo(
@@ -45,18 +52,43 @@ pub async fn list_my_todos(
     Ok((StatusCode::OK, Json(TodosResponse { items })))
 }
 
+pub async fn update_todo_completed(
+    State(registry): State<AppRegistry>,
+    Path(todo_id): Path<TodoId>,
+    headers: HeaderMap,
+    Json(req): Json<UpdateTodoCompletedRequest>,
+) -> AppResult<(StatusCode, Json<TodoResponse>)> {
+    require_auth(&registry, &headers)?;
+
+    let usecase = UpdateTodoCompletedUsecase::new(registry.todo_repository());
+    let todo = usecase
+        .execute(UpdateTodoCompletedInput {
+            id: todo_id,
+            completed: req.completed,
+        })
+        .await?;
+
+    Ok((StatusCode::OK, Json(TodoResponse::from(todo))))
+}
+
 #[cfg(test)]
 mod tests {
     use crate::handler::test_support::{
         build_auth_header, build_registry_with_auth_for_user, build_registry_with_jwt,
         build_registry_with_valid_auth,
     };
+    use crate::model::todo::UpdateTodoCompletedRequest;
+    use crate::route::todo::build_todo_routers;
 
     use super::*;
     use axum::{
         Json,
-        extract::State,
-        http::{HeaderMap, StatusCode},
+        body::Body,
+        extract::{Path, State},
+        http::{
+            HeaderMap, Request, StatusCode,
+            header::{AUTHORIZATION, CONTENT_TYPE},
+        },
     };
     use kernel::{
         model::{
@@ -70,6 +102,7 @@ mod tests {
     use rstest::rstest;
     use shared::error::AppError;
     use std::sync::Arc;
+    use tower::util::ServiceExt;
 
     #[rstest]
     #[tokio::test]
@@ -277,5 +310,192 @@ mod tests {
             .expect_err("不正JWTは401を期待する");
 
         assert!(matches!(err, AppError::Unauthorized(_)));
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn タスク完了更新はcompleted_trueで200と更新後todoを返す() {
+        let (mut registry, headers) = build_registry_with_valid_auth();
+        let todo_id = TodoId::new();
+        let assignee_user_id = UserId::new();
+        let mut repo = MockTodoRepository::new();
+        repo.expect_update_completed()
+            .withf(move |event| event.id == todo_id && event.completed)
+            .returning(move |event| {
+                Ok(Todo {
+                    id: event.id,
+                    assignee_user_id,
+                    title: "updated-todo".to_string(),
+                    completed: event.completed,
+                    due_at: None,
+                })
+            });
+
+        let repo_arc: Arc<dyn TodoRepository> = Arc::new(repo);
+        registry.expect_todo_repository().return_const(repo_arc);
+
+        let registry: AppRegistry = Arc::new(registry);
+        let req = UpdateTodoCompletedRequest::new(true);
+
+        let (status, Json(body)) =
+            update_todo_completed(State(registry), Path(todo_id), headers, Json(req))
+                .await
+                .expect("正常系は成功を期待する");
+
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body.id, todo_id);
+        assert_eq!(body.assignee_user_id, assignee_user_id);
+        assert_eq!(body.title, "updated-todo");
+        assert!(body.completed);
+        assert!(body.due_at.is_none());
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn タスク完了更新はcompleted_falseで200と更新後todoを返す() {
+        let (mut registry, headers) = build_registry_with_valid_auth();
+        let todo_id = TodoId::new();
+        let assignee_user_id = UserId::new();
+        let mut repo = MockTodoRepository::new();
+        repo.expect_update_completed()
+            .withf(move |event| event.id == todo_id && !event.completed)
+            .returning(move |event| {
+                Ok(Todo {
+                    id: event.id,
+                    assignee_user_id,
+                    title: "updated-todo".to_string(),
+                    completed: event.completed,
+                    due_at: None,
+                })
+            });
+
+        let repo_arc: Arc<dyn TodoRepository> = Arc::new(repo);
+        registry.expect_todo_repository().return_const(repo_arc);
+
+        let registry: AppRegistry = Arc::new(registry);
+        let req = UpdateTodoCompletedRequest::new(false);
+
+        let (status, Json(body)) =
+            update_todo_completed(State(registry), Path(todo_id), headers, Json(req))
+                .await
+                .expect("正常系は成功を期待する");
+
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body.id, todo_id);
+        assert_eq!(body.assignee_user_id, assignee_user_id);
+        assert_eq!(body.title, "updated-todo");
+        assert!(!body.completed);
+        assert!(body.due_at.is_none());
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn タスク完了更新はauthorizationヘッダがないと401を返す() {
+        let mut repo = MockTodoRepository::new();
+        repo.expect_update_completed().times(0);
+
+        let mut registry = MockAppRegistryExt::new();
+        let repo_arc: Arc<dyn TodoRepository> = Arc::new(repo);
+        registry.expect_todo_repository().return_const(repo_arc);
+        let registry: AppRegistry = Arc::new(registry);
+        let headers = HeaderMap::new();
+
+        let err = update_todo_completed(
+            State(registry),
+            Path(TodoId::new()),
+            headers,
+            Json(UpdateTodoCompletedRequest::new(true)),
+        )
+        .await
+        .expect_err("Authorizationヘッダなしは401を期待する");
+
+        assert!(matches!(err, AppError::Unauthorized(_)));
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn タスク完了更新は不正jwtで401を返す() {
+        let (mut registry, _jwt_issuer) = build_registry_with_jwt();
+        let mut repo = MockTodoRepository::new();
+        repo.expect_update_completed().times(0);
+
+        let repo_arc: Arc<dyn TodoRepository> = Arc::new(repo);
+        registry.expect_todo_repository().return_const(repo_arc);
+
+        let registry: AppRegistry = Arc::new(registry);
+        let wrong_issuer = JwtIssuer::new("wrong-secret".to_string(), 60_u64 * 60);
+        let wrong_token = wrong_issuer.issue_token(UserId::new()).expect("jwt生成");
+        let headers = build_auth_header(&wrong_token.0);
+
+        let err = update_todo_completed(
+            State(registry),
+            Path(TodoId::new()),
+            headers,
+            Json(UpdateTodoCompletedRequest::new(true)),
+        )
+        .await
+        .expect_err("不正JWTは401を期待する");
+
+        assert!(matches!(err, AppError::Unauthorized(_)));
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn タスク完了更新は不正なtodo_idで400を返す() {
+        let (mut registry, headers) = build_registry_with_valid_auth();
+        let mut repo = MockTodoRepository::new();
+        repo.expect_update_completed().times(0);
+
+        let repo_arc: Arc<dyn TodoRepository> = Arc::new(repo);
+        registry.expect_todo_repository().return_const(repo_arc);
+
+        let registry: AppRegistry = Arc::new(registry);
+        let app = build_todo_routers().with_state(registry);
+        let auth_value = headers
+            .get(AUTHORIZATION)
+            .expect("Authorizationヘッダがある")
+            .clone();
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("PATCH")
+                    .uri("/todos/invalid-todo-id/completed")
+                    .header(AUTHORIZATION, auth_value)
+                    .header(CONTENT_TYPE, "application/json")
+                    .body(Body::from(r#"{"completed":true}"#))
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn タスク完了更新は存在しないtodo_idで404を返す() {
+        let (mut registry, headers) = build_registry_with_valid_auth();
+        let todo_id = TodoId::new();
+        let mut repo = MockTodoRepository::new();
+        repo.expect_update_completed()
+            .withf(move |event| event.id == todo_id && event.completed)
+            .returning(|_event| Err(AppError::EntityNotFoundError("todo not found".into())));
+
+        let repo_arc: Arc<dyn TodoRepository> = Arc::new(repo);
+        registry.expect_todo_repository().return_const(repo_arc);
+
+        let registry: AppRegistry = Arc::new(registry);
+
+        let err = update_todo_completed(
+            State(registry),
+            Path(todo_id),
+            headers,
+            Json(UpdateTodoCompletedRequest::new(true)),
+        )
+        .await
+        .expect_err("存在しないtodo_idは404を期待する");
+
+        assert!(matches!(err, AppError::EntityNotFoundError(_)));
     }
 }
