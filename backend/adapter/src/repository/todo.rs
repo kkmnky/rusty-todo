@@ -5,7 +5,7 @@ use kernel::{
         id::{TodoId, UserId},
         todo::{
             Todo,
-            event::{CreateTodo, UpdateTodoCompleted},
+            event::{CreateTodo, UpdateTodo, UpdateTodoCompleted},
         },
     },
     repository::todo::TodoRepository,
@@ -84,6 +84,39 @@ impl TodoRepository for TodoRepositoryImpl {
         Ok(todos)
     }
 
+    async fn update(&self, event: UpdateTodo) -> AppResult<Todo> {
+        let row = sqlx::query_as!(
+            TodoRow,
+            r#"--sql
+                UPDATE todos
+                SET title = $1,
+                    user_id = $2,
+                    due_at = $3
+                WHERE id = $4
+                RETURNING
+                    id,
+                    user_id,
+                    title,
+                    completed,
+                    due_at,
+                    created_at,
+                    updated_at
+            "#,
+            event.title,
+            event.assignee_user_id as _,
+            event.due_at,
+            event.id as _,
+        )
+        .fetch_optional(self.db.inner_ref())
+        .await
+        .map_err(AppError::SqlExecuteError)?
+        .ok_or_else(|| AppError::EntityNotFoundError("No todo has been updated".into()))?;
+
+        let todo = Todo::try_from(row)?;
+
+        Ok(todo)
+    }
+
     async fn update_completed(&self, event: UpdateTodoCompleted) -> AppResult<Todo> {
         let row = sqlx::query_as!(
             TodoRow,
@@ -120,7 +153,7 @@ mod tests {
     use crate::database::ConnectionPool;
     use kernel::model::{
         id::{TodoId, UserId},
-        todo::event::CreateTodo,
+        todo::event::{CreateTodo, UpdateTodo},
     };
     use shared::error::AppError;
     use sqlx::{
@@ -325,5 +358,251 @@ mod tests {
             .expect_err("存在しないtodo_idでは失敗する");
 
         assert!(matches!(err, AppError::EntityNotFoundError(_)));
+    }
+
+    #[sqlx::test(fixtures("common", "todo"))]
+    async fn タスク編集でtitleのみ更新できる(pool: PgPool) {
+        let pool = ConnectionPool::new(pool.clone());
+        let repo = TodoRepositoryImpl::new(pool.clone());
+        let target_todo_id: TodoId = "10f0d6f2-c464-4f4c-92f0-6d87f7324f11"
+            .parse()
+            .expect("todo_id取得");
+        let target_user_id: UserId = "75ef7d75-3b57-4f54-8e8e-fdb65738690c"
+            .parse()
+            .expect("user_id取得");
+
+        let event = UpdateTodo {
+            id: target_todo_id,
+            title: "edited-title".to_string(),
+            due_at: None,
+            assignee_user_id: target_user_id,
+        };
+
+        let updated_todo = repo.update(event).await.expect("更新が成功する");
+
+        assert_eq!(updated_todo.id, target_todo_id);
+        assert_eq!(updated_todo.assignee_user_id, target_user_id);
+        assert_eq!(updated_todo.title, "edited-title");
+        assert!(!updated_todo.completed);
+        assert!(updated_todo.due_at.is_none());
+
+        let row = sqlx::query("SELECT user_id, title, due_at FROM todos WHERE id = $1")
+            .bind(target_todo_id)
+            .fetch_one(pool.inner_ref())
+            .await
+            .expect("DBから取得できる");
+        let persisted_user_id: UserId = row.try_get("user_id").expect("user_id取得");
+        let persisted_title: String = row.try_get("title").expect("title取得");
+        let persisted_due_at: Option<DateTime<Utc>> = row.try_get("due_at").expect("due_at取得");
+
+        assert_eq!(persisted_user_id, updated_todo.assignee_user_id);
+        assert_eq!(persisted_title, updated_todo.title);
+        assert_eq!(persisted_due_at, updated_todo.due_at);
+    }
+
+    #[sqlx::test(fixtures("common", "todo"))]
+    async fn タスク編集でdue_atのみ更新できる(pool: PgPool) {
+        let pool = ConnectionPool::new(pool.clone());
+        let repo = TodoRepositoryImpl::new(pool.clone());
+        let target_todo_id: TodoId = "10f0d6f2-c464-4f4c-92f0-6d87f7324f11"
+            .parse()
+            .expect("todo_id取得");
+        let target_user_id: UserId = "75ef7d75-3b57-4f54-8e8e-fdb65738690c"
+            .parse()
+            .expect("user_id取得");
+        let due_at = DateTime::parse_from_rfc3339("2026-02-01T09:30:00Z")
+            .expect("due_at作成")
+            .with_timezone(&Utc);
+
+        let event = UpdateTodo {
+            id: target_todo_id,
+            title: "target-old".to_string(),
+            due_at: Some(due_at),
+            assignee_user_id: target_user_id,
+        };
+
+        let updated_todo = repo.update(event).await.expect("更新が成功する");
+
+        assert_eq!(updated_todo.id, target_todo_id);
+        assert_eq!(updated_todo.assignee_user_id, target_user_id);
+        assert_eq!(updated_todo.title, "target-old");
+        assert_eq!(updated_todo.due_at, Some(due_at));
+
+        let row = sqlx::query("SELECT title, due_at FROM todos WHERE id = $1")
+            .bind(target_todo_id)
+            .fetch_one(pool.inner_ref())
+            .await
+            .expect("DBから取得できる");
+        let persisted_title: String = row.try_get("title").expect("title取得");
+        let persisted_due_at: Option<DateTime<Utc>> = row.try_get("due_at").expect("due_at取得");
+
+        assert_eq!(persisted_title, updated_todo.title);
+        assert_eq!(persisted_due_at, updated_todo.due_at);
+    }
+
+    #[sqlx::test(fixtures("common", "todo"))]
+    async fn タスク編集でassignee_user_idのみ更新できる(pool: PgPool) {
+        let pool = ConnectionPool::new(pool.clone());
+        let repo = TodoRepositoryImpl::new(pool.clone());
+        let target_todo_id: TodoId = "10f0d6f2-c464-4f4c-92f0-6d87f7324f11"
+            .parse()
+            .expect("todo_id取得");
+        let changed_assignee_user_id: UserId = "f0f6de0a-8e7f-4ca3-a0ed-2db4e8d51056"
+            .parse()
+            .expect("user_id取得");
+
+        let event = UpdateTodo {
+            id: target_todo_id,
+            title: "target-old".to_string(),
+            due_at: None,
+            assignee_user_id: changed_assignee_user_id,
+        };
+
+        let updated_todo = repo.update(event).await.expect("更新が成功する");
+
+        assert_eq!(updated_todo.id, target_todo_id);
+        assert_eq!(updated_todo.assignee_user_id, changed_assignee_user_id);
+        assert_eq!(updated_todo.title, "target-old");
+        assert!(updated_todo.due_at.is_none());
+
+        let row = sqlx::query("SELECT user_id, title, due_at FROM todos WHERE id = $1")
+            .bind(target_todo_id)
+            .fetch_one(pool.inner_ref())
+            .await
+            .expect("DBから取得できる");
+        let persisted_user_id: UserId = row.try_get("user_id").expect("user_id取得");
+        let persisted_title: String = row.try_get("title").expect("title取得");
+        let persisted_due_at: Option<DateTime<Utc>> = row.try_get("due_at").expect("due_at取得");
+
+        assert_eq!(persisted_user_id, updated_todo.assignee_user_id);
+        assert_eq!(persisted_title, updated_todo.title);
+        assert_eq!(persisted_due_at, updated_todo.due_at);
+    }
+
+    #[sqlx::test(fixtures("common", "todo"))]
+    async fn タスク編集で複数項目を同時更新できる(pool: PgPool) {
+        let pool = ConnectionPool::new(pool.clone());
+        let repo = TodoRepositoryImpl::new(pool.clone());
+        let target_todo_id: TodoId = "10f0d6f2-c464-4f4c-92f0-6d87f7324f11"
+            .parse()
+            .expect("todo_id取得");
+        let changed_assignee_user_id: UserId = "f0f6de0a-8e7f-4ca3-a0ed-2db4e8d51056"
+            .parse()
+            .expect("user_id取得");
+        let due_at = DateTime::parse_from_rfc3339("2026-03-01T12:00:00Z")
+            .expect("due_at作成")
+            .with_timezone(&Utc);
+
+        let event = UpdateTodo {
+            id: target_todo_id,
+            title: "edited-all-fields".to_string(),
+            due_at: Some(due_at),
+            assignee_user_id: changed_assignee_user_id,
+        };
+
+        let updated_todo = repo.update(event).await.expect("更新が成功する");
+
+        assert_eq!(updated_todo.id, target_todo_id);
+        assert_eq!(updated_todo.assignee_user_id, changed_assignee_user_id);
+        assert_eq!(updated_todo.title, "edited-all-fields");
+        assert_eq!(updated_todo.due_at, Some(due_at));
+
+        let row = sqlx::query("SELECT user_id, title, due_at FROM todos WHERE id = $1")
+            .bind(target_todo_id)
+            .fetch_one(pool.inner_ref())
+            .await
+            .expect("DBから取得できる");
+        let persisted_user_id: UserId = row.try_get("user_id").expect("user_id取得");
+        let persisted_title: String = row.try_get("title").expect("title取得");
+        let persisted_due_at: Option<DateTime<Utc>> = row.try_get("due_at").expect("due_at取得");
+
+        assert_eq!(persisted_user_id, updated_todo.assignee_user_id);
+        assert_eq!(persisted_title, updated_todo.title);
+        assert_eq!(persisted_due_at, updated_todo.due_at);
+    }
+
+    #[sqlx::test(fixtures("common", "todo"))]
+    async fn タスク編集でdue_atをnullで解除できる(pool: PgPool) {
+        let pool = ConnectionPool::new(pool.clone());
+        let repo = TodoRepositoryImpl::new(pool.clone());
+        let target_todo_id: TodoId = "10f0d6f2-c464-4f4c-92f0-6d87f7324f11"
+            .parse()
+            .expect("todo_id取得");
+        let target_user_id: UserId = "75ef7d75-3b57-4f54-8e8e-fdb65738690c"
+            .parse()
+            .expect("user_id取得");
+
+        let existing_due_at = DateTime::parse_from_rfc3339("2026-04-01T08:00:00Z")
+            .expect("due_at作成")
+            .with_timezone(&Utc);
+        sqlx::query("UPDATE todos SET due_at = $1 WHERE id = $2")
+            .bind(existing_due_at)
+            .bind(target_todo_id)
+            .execute(pool.inner_ref())
+            .await
+            .expect("初期状態を設定できる");
+
+        let event = UpdateTodo {
+            id: target_todo_id,
+            title: "target-old".to_string(),
+            due_at: None,
+            assignee_user_id: target_user_id,
+        };
+
+        let updated_todo = repo.update(event).await.expect("更新が成功する");
+
+        assert_eq!(updated_todo.id, target_todo_id);
+        assert_eq!(updated_todo.title, "target-old");
+        assert!(updated_todo.due_at.is_none());
+
+        let row = sqlx::query("SELECT due_at FROM todos WHERE id = $1")
+            .bind(target_todo_id)
+            .fetch_one(pool.inner_ref())
+            .await
+            .expect("DBから取得できる");
+        let persisted_due_at: Option<DateTime<Utc>> = row.try_get("due_at").expect("due_at取得");
+
+        assert_eq!(persisted_due_at, updated_todo.due_at);
+    }
+
+    #[sqlx::test(fixtures("common", "todo"))]
+    async fn タスク編集は存在しないtodo_idで失敗する(pool: PgPool) {
+        let pool = ConnectionPool::new(pool.clone());
+        let repo = TodoRepositoryImpl::new(pool.clone());
+
+        let event = UpdateTodo {
+            id: TodoId::new(),
+            title: "edited-title".to_string(),
+            due_at: None,
+            assignee_user_id: UserId::new(),
+        };
+        let err = repo
+            .update(event)
+            .await
+            .expect_err("存在しないtodo_idでは失敗する");
+
+        assert!(matches!(err, AppError::EntityNotFoundError(_)));
+    }
+
+    #[sqlx::test(fixtures("common", "todo"))]
+    async fn タスク編集は存在しないassignee_user_idで失敗する(pool: PgPool) {
+        let pool = ConnectionPool::new(pool.clone());
+        let repo = TodoRepositoryImpl::new(pool.clone());
+        let target_todo_id: TodoId = "10f0d6f2-c464-4f4c-92f0-6d87f7324f11"
+            .parse()
+            .expect("todo_id取得");
+
+        let event = UpdateTodo {
+            id: target_todo_id,
+            title: "target-old".to_string(),
+            due_at: None,
+            assignee_user_id: UserId::new(),
+        };
+        let err = repo
+            .update(event)
+            .await
+            .expect_err("存在しないassignee_user_idでは失敗する");
+
+        assert!(matches!(err, AppError::SqlExecuteError(_)));
     }
 }

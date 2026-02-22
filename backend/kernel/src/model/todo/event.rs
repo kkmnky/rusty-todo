@@ -8,6 +8,13 @@ pub struct CreateTodo {
     pub due_at: Option<DateTime<Utc>>,
 }
 
+pub struct UpdateTodo {
+    pub id: TodoId,
+    pub title: String,
+    pub assignee_user_id: UserId,
+    pub due_at: Option<DateTime<Utc>>,
+}
+
 pub struct UpdateTodoCompleted {
     pub id: TodoId,
     pub completed: bool,
