@@ -266,8 +266,10 @@
             - [x] 不正JWTで401を返す
             - [x] 不正な `todo_id` で400を返す
             - [x] 存在しない `todo_id` で404を返す
-      - [ ] テスト(API統合): integration testを実装する
-        - [ ] `completed` に boolean 以外を送ったときの400/422を最小1ケースで確認する
+      - [x] テスト(API統合): integration testを実装する
+        - [x] TodoのCRUDが1シナリオで実行できる
+          - [x] 作成 → 一覧取得 → 編集 → 完了更新 → 削除まで確認する
+        - [x] `PATCH /api/v1/todos/{todo_id}/completed` に boolean 以外を送ったときの400/422を確認する
     - 画面状態（最低限）:
       - [ ] 読み込み中表示
       - [ ] 更新失敗時のエラー表示
