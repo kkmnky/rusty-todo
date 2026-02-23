@@ -140,6 +140,41 @@ mod tests {
     use std::sync::Arc;
     use tower::util::ServiceExt;
 
+    #[derive(Clone, Copy)]
+    enum AuthCase {
+        Missing,
+        Invalid,
+    }
+
+    fn assert_unauthorized(err: AppError) {
+        assert!(matches!(err, AppError::Unauthorized(_)));
+    }
+
+    fn build_registry_with_repo_and_auth(
+        repo: MockTodoRepository,
+        auth_case: AuthCase,
+    ) -> (AppRegistry, HeaderMap) {
+        match auth_case {
+            AuthCase::Missing => {
+                let mut registry = MockAppRegistryExt::new();
+                let repo_arc: Arc<dyn TodoRepository> = Arc::new(repo);
+                registry.expect_todo_repository().return_const(repo_arc);
+                (Arc::new(registry), HeaderMap::new())
+            }
+            AuthCase::Invalid => {
+                let (mut registry, _jwt_issuer) = build_registry_with_jwt();
+                let repo_arc: Arc<dyn TodoRepository> = Arc::new(repo);
+                registry.expect_todo_repository().return_const(repo_arc);
+
+                let wrong_issuer = JwtIssuer::new("wrong-secret".to_string(), 60_u64 * 60);
+                let wrong_token = wrong_issuer.issue_token(UserId::new()).expect("jwt生成");
+                let headers = build_auth_header(&wrong_token.0);
+
+                (Arc::new(registry), headers)
+            }
+        }
+    }
+
     #[rstest]
     #[tokio::test]
     async fn タスク追加は201と必要項目を返す() {
@@ -308,44 +343,19 @@ mod tests {
     }
 
     #[rstest]
+    #[case::missing(AuthCase::Missing)]
+    #[case::invalid(AuthCase::Invalid)]
     #[tokio::test]
-    async fn 自分のタスク一覧はauthorizationヘッダがないと401を返す() {
+    async fn 自分のタスク一覧は認証不備で401を返す(#[case] auth_case: AuthCase) {
         let mut repo = MockTodoRepository::new();
         repo.expect_find_by_user_id().times(0);
-
-        let mut registry = MockAppRegistryExt::new();
-        let repo_arc: Arc<dyn TodoRepository> = Arc::new(repo);
-        registry.expect_todo_repository().return_const(repo_arc);
-        let registry: AppRegistry = Arc::new(registry);
-        let headers = HeaderMap::new();
+        let (registry, headers) = build_registry_with_repo_and_auth(repo, auth_case);
 
         let err = list_my_todos(State(registry), headers)
             .await
-            .expect_err("Authorizationヘッダなしは401を期待する");
+            .expect_err("認証不備は401を期待する");
 
-        assert!(matches!(err, AppError::Unauthorized(_)));
-    }
-
-    #[rstest]
-    #[tokio::test]
-    async fn 自分のタスク一覧は不正jwtで401を返す() {
-        let (mut registry, _jwt_issuer) = build_registry_with_jwt();
-        let mut repo = MockTodoRepository::new();
-        repo.expect_find_by_user_id().times(0);
-
-        let repo_arc: Arc<dyn TodoRepository> = Arc::new(repo);
-        registry.expect_todo_repository().return_const(repo_arc);
-
-        let registry: AppRegistry = Arc::new(registry);
-        let wrong_issuer = JwtIssuer::new("wrong-secret".to_string(), 60_u64 * 60);
-        let wrong_token = wrong_issuer.issue_token(UserId::new()).expect("jwt生成");
-        let headers = build_auth_header(&wrong_token.0);
-
-        let err = list_my_todos(State(registry), headers)
-            .await
-            .expect_err("不正JWTは401を期待する");
-
-        assert!(matches!(err, AppError::Unauthorized(_)));
+        assert_unauthorized(err);
     }
 
     #[rstest]
@@ -425,16 +435,13 @@ mod tests {
     }
 
     #[rstest]
+    #[case::missing(AuthCase::Missing)]
+    #[case::invalid(AuthCase::Invalid)]
     #[tokio::test]
-    async fn タスク完了更新はauthorizationヘッダがないと401を返す() {
+    async fn タスク完了更新は認証不備で401を返す(#[case] auth_case: AuthCase) {
         let mut repo = MockTodoRepository::new();
         repo.expect_update_completed().times(0);
-
-        let mut registry = MockAppRegistryExt::new();
-        let repo_arc: Arc<dyn TodoRepository> = Arc::new(repo);
-        registry.expect_todo_repository().return_const(repo_arc);
-        let registry: AppRegistry = Arc::new(registry);
-        let headers = HeaderMap::new();
+        let (registry, headers) = build_registry_with_repo_and_auth(repo, auth_case);
 
         let err = update_todo_completed(
             State(registry),
@@ -443,36 +450,9 @@ mod tests {
             Json(UpdateTodoCompletedRequest::new(true)),
         )
         .await
-        .expect_err("Authorizationヘッダなしは401を期待する");
+        .expect_err("認証不備は401を期待する");
 
-        assert!(matches!(err, AppError::Unauthorized(_)));
-    }
-
-    #[rstest]
-    #[tokio::test]
-    async fn タスク完了更新は不正jwtで401を返す() {
-        let (mut registry, _jwt_issuer) = build_registry_with_jwt();
-        let mut repo = MockTodoRepository::new();
-        repo.expect_update_completed().times(0);
-
-        let repo_arc: Arc<dyn TodoRepository> = Arc::new(repo);
-        registry.expect_todo_repository().return_const(repo_arc);
-
-        let registry: AppRegistry = Arc::new(registry);
-        let wrong_issuer = JwtIssuer::new("wrong-secret".to_string(), 60_u64 * 60);
-        let wrong_token = wrong_issuer.issue_token(UserId::new()).expect("jwt生成");
-        let headers = build_auth_header(&wrong_token.0);
-
-        let err = update_todo_completed(
-            State(registry),
-            Path(TodoId::new()),
-            headers,
-            Json(UpdateTodoCompletedRequest::new(true)),
-        )
-        .await
-        .expect_err("不正JWTは401を期待する");
-
-        assert!(matches!(err, AppError::Unauthorized(_)));
+        assert_unauthorized(err);
     }
 
     #[rstest]
@@ -591,16 +571,13 @@ mod tests {
     }
 
     #[rstest]
+    #[case::missing(AuthCase::Missing)]
+    #[case::invalid(AuthCase::Invalid)]
     #[tokio::test]
-    async fn タスク編集はauthorizationヘッダがないと401を返す() {
+    async fn タスク編集は認証不備で401を返す(#[case] auth_case: AuthCase) {
         let mut repo = MockTodoRepository::new();
         repo.expect_update().times(0);
-
-        let mut registry = MockAppRegistryExt::new();
-        let repo_arc: Arc<dyn TodoRepository> = Arc::new(repo);
-        registry.expect_todo_repository().return_const(repo_arc);
-        let registry: AppRegistry = Arc::new(registry);
-        let headers = HeaderMap::new();
+        let (registry, headers) = build_registry_with_repo_and_auth(repo, auth_case);
 
         let err = update_todo(
             State(registry),
@@ -613,40 +590,9 @@ mod tests {
             )),
         )
         .await
-        .expect_err("Authorizationヘッダなしは401を期待する");
+        .expect_err("認証不備は401を期待する");
 
-        assert!(matches!(err, AppError::Unauthorized(_)));
-    }
-
-    #[rstest]
-    #[tokio::test]
-    async fn タスク編集は不正jwtで401を返す() {
-        let (mut registry, _jwt_issuer) = build_registry_with_jwt();
-        let mut repo = MockTodoRepository::new();
-        repo.expect_update().times(0);
-
-        let repo_arc: Arc<dyn TodoRepository> = Arc::new(repo);
-        registry.expect_todo_repository().return_const(repo_arc);
-
-        let registry: AppRegistry = Arc::new(registry);
-        let wrong_issuer = JwtIssuer::new("wrong-secret".to_string(), 60_u64 * 60);
-        let wrong_token = wrong_issuer.issue_token(UserId::new()).expect("jwt生成");
-        let headers = build_auth_header(&wrong_token.0);
-
-        let err = update_todo(
-            State(registry),
-            Path(TodoId::new()),
-            headers,
-            Json(UpdateTodoRequest::new(
-                Some("edited-title".to_string()),
-                None,
-                None,
-            )),
-        )
-        .await
-        .expect_err("不正JWTは401を期待する");
-
-        assert!(matches!(err, AppError::Unauthorized(_)));
+        assert_unauthorized(err);
     }
 
     #[rstest]

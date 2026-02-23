@@ -117,6 +117,41 @@ mod tests {
     use shared::error::AppError;
     use std::sync::Arc;
 
+    #[derive(Clone, Copy)]
+    enum AuthCase {
+        Missing,
+        Invalid,
+    }
+
+    fn assert_unauthorized(err: AppError) {
+        assert!(matches!(err, AppError::Unauthorized(_)));
+    }
+
+    fn build_registry_with_user_repo_and_auth(
+        repo: MockUserRepository,
+        auth_case: AuthCase,
+    ) -> (AppRegistry, HeaderMap) {
+        match auth_case {
+            AuthCase::Missing => {
+                let mut registry = MockAppRegistryExt::new();
+                let repo_arc: Arc<dyn UserRepository> = Arc::new(repo);
+                registry.expect_user_repository().return_const(repo_arc);
+                (Arc::new(registry), HeaderMap::new())
+            }
+            AuthCase::Invalid => {
+                let (mut registry, _jwt_issuer) = build_registry_with_jwt();
+                let repo_arc: Arc<dyn UserRepository> = Arc::new(repo);
+                registry.expect_user_repository().return_const(repo_arc);
+
+                let wrong_issuer = JwtIssuer::new("wrong-secret".to_string(), 60_u64 * 60);
+                let wrong_token = wrong_issuer.issue_token(UserId::new()).expect("jwt生成");
+                let headers = build_auth_header(&wrong_token.0);
+
+                (Arc::new(registry), headers)
+            }
+        }
+    }
+
     #[rstest]
     #[tokio::test]
     async fn ユーザ追加は201と必要項目を返す() {
@@ -288,45 +323,19 @@ mod tests {
     }
 
     #[rstest]
+    #[case::missing(AuthCase::Missing)]
+    #[case::invalid(AuthCase::Invalid)]
     #[tokio::test]
-    async fn ユーザ一覧はauthorizationヘッダがないと401を返す() {
+    async fn ユーザ一覧は認証不備で401を返す(#[case] auth_case: AuthCase) {
         let mut repo = MockUserRepository::new();
         repo.expect_find_all().times(0);
-
-        let mut registry = MockAppRegistryExt::new();
-        let repo_arc: Arc<dyn UserRepository> = Arc::new(repo);
-        registry.expect_user_repository().return_const(repo_arc);
-
-        let registry: AppRegistry = Arc::new(registry);
-        let headers = HeaderMap::new();
+        let (registry, headers) = build_registry_with_user_repo_and_auth(repo, auth_case);
 
         let err = list_users(State(registry), headers)
             .await
-            .expect_err("Authorizationヘッダなしは401を期待する");
+            .expect_err("認証不備は401を期待する");
 
-        assert!(matches!(err, AppError::Unauthorized(_)));
-    }
-
-    #[rstest]
-    #[tokio::test]
-    async fn ユーザ一覧は不正jwtで401を返す() {
-        let (mut registry, _jwt_issuer) = build_registry_with_jwt();
-        let mut repo = MockUserRepository::new();
-        repo.expect_find_all().times(0);
-
-        let repo_arc: Arc<dyn UserRepository> = Arc::new(repo);
-        registry.expect_user_repository().return_const(repo_arc);
-
-        let registry: AppRegistry = Arc::new(registry);
-        let wrong_issuer = JwtIssuer::new("wrong-secret".to_string(), 60_u64 * 60);
-        let wrong_token = wrong_issuer.issue_token(UserId::new()).expect("jwt生成");
-        let headers = build_auth_header(&wrong_token.0);
-
-        let err = list_users(State(registry), headers)
-            .await
-            .expect_err("不正JWTは401を期待する");
-
-        assert!(matches!(err, AppError::Unauthorized(_)));
+        assert_unauthorized(err);
     }
 
     #[rstest]
@@ -335,19 +344,13 @@ mod tests {
         let user_id = UserId::new();
         let mut repo = MockUserRepository::new();
         repo.expect_delete().times(0);
-
-        let mut registry = MockAppRegistryExt::new();
-        let repo_arc: Arc<dyn UserRepository> = Arc::new(repo);
-        registry.expect_user_repository().return_const(repo_arc);
-
-        let registry: AppRegistry = Arc::new(registry);
-        let headers = HeaderMap::new();
+        let (registry, headers) = build_registry_with_user_repo_and_auth(repo, AuthCase::Missing);
 
         let err = delete_user(State(registry), Path(user_id.to_string()), headers)
             .await
             .expect_err("Authorizationヘッダなしは401を期待する");
 
-        assert!(matches!(err, AppError::Unauthorized(_)));
+        assert_unauthorized(err);
     }
 
     #[rstest]
@@ -383,45 +386,19 @@ mod tests {
     }
 
     #[rstest]
+    #[case::missing(AuthCase::Missing)]
+    #[case::invalid(AuthCase::Invalid)]
     #[tokio::test]
-    async fn 自分情報取得はauthorizationヘッダがないと401を返す() {
+    async fn 自分情報取得は認証不備で401を返す(#[case] auth_case: AuthCase) {
         let mut repo = MockUserRepository::new();
         repo.expect_find_by_id().times(0);
-
-        let mut registry = MockAppRegistryExt::new();
-        let repo_arc: Arc<dyn UserRepository> = Arc::new(repo);
-        registry.expect_user_repository().return_const(repo_arc);
-
-        let registry: AppRegistry = Arc::new(registry);
-        let headers = HeaderMap::new();
+        let (registry, headers) = build_registry_with_user_repo_and_auth(repo, auth_case);
 
         let err = get_current_user(State(registry), headers)
             .await
-            .expect_err("Authorizationヘッダなしは401を期待する");
+            .expect_err("認証不備は401を期待する");
 
-        assert!(matches!(err, AppError::Unauthorized(_)));
-    }
-
-    #[rstest]
-    #[tokio::test]
-    async fn 自分情報取得は不正jwtで401を返す() {
-        let (mut registry, _jwt_issuer) = build_registry_with_jwt();
-        let mut repo = MockUserRepository::new();
-        repo.expect_find_by_id().times(0);
-
-        let repo_arc: Arc<dyn UserRepository> = Arc::new(repo);
-        registry.expect_user_repository().return_const(repo_arc);
-
-        let registry: AppRegistry = Arc::new(registry);
-        let wrong_issuer = JwtIssuer::new("wrong-secret".to_string(), 60_u64 * 60);
-        let wrong_token = wrong_issuer.issue_token(UserId::new()).expect("jwt生成");
-        let headers = build_auth_header(&wrong_token.0);
-
-        let err = get_current_user(State(registry), headers)
-            .await
-            .expect_err("不正JWTは401を期待する");
-
-        assert!(matches!(err, AppError::Unauthorized(_)));
+        assert_unauthorized(err);
     }
 
     #[rstest]
@@ -477,49 +454,21 @@ mod tests {
     }
 
     #[rstest]
+    #[case::missing(AuthCase::Missing)]
+    #[case::invalid(AuthCase::Invalid)]
     #[tokio::test]
-    async fn パスワード更新はauthorizationヘッダがないと401を返す() {
+    async fn パスワード更新は認証不備で401を返す(#[case] auth_case: AuthCase) {
         let mut repo = MockUserRepository::new();
         repo.expect_update_password().times(0);
-
-        let mut registry = MockAppRegistryExt::new();
-        let repo_arc: Arc<dyn UserRepository> = Arc::new(repo);
-        registry.expect_user_repository().return_const(repo_arc);
-
-        let registry: AppRegistry = Arc::new(registry);
-        let headers = HeaderMap::new();
+        let (registry, headers) = build_registry_with_user_repo_and_auth(repo, auth_case);
         let req =
             ChangePasswordRequest::new("old-password".to_string(), "new-password".to_string());
 
         let err = change_password(State(registry), headers, Json(req))
             .await
-            .expect_err("Authorizationヘッダなしは401を期待する");
+            .expect_err("認証不備は401を期待する");
 
-        assert!(matches!(err, AppError::Unauthorized(_)));
-    }
-
-    #[rstest]
-    #[tokio::test]
-    async fn パスワード更新は不正jwtで401を返す() {
-        let (mut registry, _jwt_issuer) = build_registry_with_jwt();
-        let mut repo = MockUserRepository::new();
-        repo.expect_update_password().times(0);
-
-        let repo_arc: Arc<dyn UserRepository> = Arc::new(repo);
-        registry.expect_user_repository().return_const(repo_arc);
-
-        let registry: AppRegistry = Arc::new(registry);
-        let wrong_issuer = JwtIssuer::new("wrong-secret".to_string(), 60_u64 * 60);
-        let wrong_token = wrong_issuer.issue_token(UserId::new()).expect("jwt生成");
-        let headers = build_auth_header(&wrong_token.0);
-        let req =
-            ChangePasswordRequest::new("old-password".to_string(), "new-password".to_string());
-
-        let err = change_password(State(registry), headers, Json(req))
-            .await
-            .expect_err("不正JWTは401を期待する");
-
-        assert!(matches!(err, AppError::Unauthorized(_)));
+        assert_unauthorized(err);
     }
 
     #[rstest]
