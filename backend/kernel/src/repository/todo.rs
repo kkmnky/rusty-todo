@@ -2,7 +2,7 @@ use crate::model::{
     id::{TodoId, UserId},
     todo::{
         Todo,
-        event::{CreateTodo, UpdateTodo, UpdateTodoCompleted},
+        event::{CreateTodo, DeleteTodo, UpdateTodo, UpdateTodoCompleted},
     },
 };
 use async_trait::async_trait;
@@ -16,5 +16,5 @@ pub trait TodoRepository: Send + Sync {
     async fn find_by_user_id(&self, user_id: UserId) -> AppResult<Vec<Todo>>;
     async fn update(&self, event: UpdateTodo) -> AppResult<Todo>;
     async fn update_completed(&self, event: UpdateTodoCompleted) -> AppResult<Todo>;
-    async fn delete(&self, id: TodoId) -> AppResult<()>;
+    async fn delete(&self, event: DeleteTodo) -> AppResult<()>;
 }

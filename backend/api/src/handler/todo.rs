@@ -7,6 +7,7 @@ use garde::Validate;
 use kernel::{
     model::id::TodoId,
     usecase::todo::{
+        delete::{DeleteTodoInput, DeleteTodoUsecase},
         list_my_todos::ListMyTodosUsecase,
         register::RegisterTodoUsecase,
         update::{UpdateTodoInput, UpdateTodoUsecase},
@@ -104,6 +105,19 @@ pub async fn update_todo(
         .await?;
 
     Ok((StatusCode::OK, Json(TodoResponse::from(todo))))
+}
+
+pub async fn delete_todo(
+    State(registry): State<AppRegistry>,
+    Path(todo_id): Path<TodoId>,
+    headers: HeaderMap,
+) -> AppResult<StatusCode> {
+    require_auth(&registry, &headers)?;
+
+    let usecase = DeleteTodoUsecase::new(registry.todo_repository());
+    usecase.execute(DeleteTodoInput { id: todo_id }).await?;
+
+    Ok(StatusCode::NO_CONTENT)
 }
 
 #[cfg(test)]
@@ -704,6 +718,98 @@ mod tests {
         )
         .await
         .expect_err("存在しないtodo_idは404を期待する");
+
+        assert!(matches!(err, AppError::EntityNotFoundError(_)));
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn タスク削除は204を返す() {
+        let (mut registry, headers) = build_registry_with_valid_auth();
+        let todo_id = TodoId::new();
+        let mut repo = MockTodoRepository::new();
+        repo.expect_delete()
+            .withf(move |event| event.id == todo_id)
+            .returning(|_| Ok(()));
+
+        let repo_arc: Arc<dyn TodoRepository> = Arc::new(repo);
+        registry.expect_todo_repository().return_const(repo_arc);
+
+        let registry: AppRegistry = Arc::new(registry);
+
+        let status = delete_todo(State(registry), Path(todo_id), headers)
+            .await
+            .expect("正常系は成功を期待する");
+
+        assert_eq!(status, StatusCode::NO_CONTENT);
+    }
+
+    #[rstest]
+    #[case::missing(AuthCase::Missing)]
+    #[case::invalid(AuthCase::Invalid)]
+    #[tokio::test]
+    async fn タスク削除は認証不備で401を返す(#[case] auth_case: AuthCase) {
+        let mut repo = MockTodoRepository::new();
+        repo.expect_delete().times(0);
+        let (registry, headers) = build_registry_with_repo_and_auth(repo, auth_case);
+
+        let err = delete_todo(State(registry), Path(TodoId::new()), headers)
+            .await
+            .expect_err("認証不備は401を期待する");
+
+        assert_unauthorized(err);
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn タスク削除は不正なtodo_idで400を返す() {
+        let (mut registry, headers) = build_registry_with_valid_auth();
+        let mut repo = MockTodoRepository::new();
+        repo.expect_delete().times(0);
+
+        let repo_arc: Arc<dyn TodoRepository> = Arc::new(repo);
+        registry.expect_todo_repository().return_const(repo_arc);
+
+        let registry: AppRegistry = Arc::new(registry);
+        let app = build_todo_routers().with_state(registry);
+        let auth_value = headers
+            .get(AUTHORIZATION)
+            .expect("Authorizationヘッダがある")
+            .clone();
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("DELETE")
+                    .uri("/todos/invalid-todo-id")
+                    .header(AUTHORIZATION, auth_value)
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn タスク削除は存在しないtodo_idで404を返す() {
+        let (mut registry, headers) = build_registry_with_valid_auth();
+        let todo_id = TodoId::new();
+        let mut repo = MockTodoRepository::new();
+        repo.expect_delete()
+            .withf(move |event| event.id == todo_id)
+            .returning(|_| Err(AppError::EntityNotFoundError("todo not found".into())));
+
+        let repo_arc: Arc<dyn TodoRepository> = Arc::new(repo);
+        registry.expect_todo_repository().return_const(repo_arc);
+
+        let registry: AppRegistry = Arc::new(registry);
+
+        let err = delete_todo(State(registry), Path(todo_id), headers)
+            .await
+            .expect_err("存在しないtodo_idは404を期待する");
 
         assert!(matches!(err, AppError::EntityNotFoundError(_)));
     }

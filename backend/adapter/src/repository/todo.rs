@@ -5,7 +5,7 @@ use kernel::{
         id::{TodoId, UserId},
         todo::{
             Todo,
-            event::{CreateTodo, UpdateTodo, UpdateTodoCompleted},
+            event::{CreateTodo, DeleteTodo, UpdateTodo, UpdateTodoCompleted},
         },
     },
     repository::todo::TodoRepository,
@@ -172,12 +172,12 @@ impl TodoRepository for TodoRepositoryImpl {
         Ok(todo)
     }
 
-    async fn delete(&self, id: TodoId) -> AppResult<()> {
+    async fn delete(&self, event: DeleteTodo) -> AppResult<()> {
         let res = sqlx::query!(
             r#"--sql
                 DELETE FROM todos WHERE id = $1
             "#,
-            id as _,
+            event.id as _,
         )
         .execute(self.db.inner_ref())
         .await
@@ -697,7 +697,9 @@ mod tests {
             .parse()
             .expect("todo_id取得");
 
-        repo.delete(target_todo_id).await.expect("削除が成功する");
+        repo.delete(DeleteTodo { id: target_todo_id })
+            .await
+            .expect("削除が成功する");
 
         let found = repo
             .find_by_id(target_todo_id)
@@ -713,7 +715,7 @@ mod tests {
         let repo = TodoRepositoryImpl::new(pool.clone());
 
         let err = repo
-            .delete(TodoId::new())
+            .delete(DeleteTodo { id: TodoId::new() })
             .await
             .expect_err("存在しないtodo_idでは失敗する");
 

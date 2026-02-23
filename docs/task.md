@@ -250,7 +250,7 @@
             - [x] 更新対象項目が1つもないと400を返す
             - [x] バリデーションエラー（例: 空title）で400を返す
             - [x] 存在しない `todo_id` で404を返す
-      - [ ] Todoを削除する
+      - [x] Todoを削除する
         - 誤操作防止の確認後に削除し、一覧から除外する
         - テスト（Adapter → API）:
           - [x] テスト(Adapter): Todo削除 正常系
@@ -258,14 +258,14 @@
             - [x] 削除後に `find_by_id(todo_id)` が `None` になる
           - [x] テスト(Adapter): Todo削除 異常系
             - [x] 存在しない `todo_id` で `EntityNotFoundError` になる
-          - [ ] テスト(API): `DELETE /api/v1/todos/{todo_id}` 正常系
-            - [ ] 204を返す
-            - [ ] レスポンスボディが空である
-          - [ ] テスト(API): `DELETE /api/v1/todos/{todo_id}` 異常系
-            - [ ] Authorizationヘッダがないと401を返す
-            - [ ] 不正JWTで401を返す
-            - [ ] 不正な `todo_id` で400を返す
-            - [ ] 存在しない `todo_id` で404を返す
+          - [x] テスト(API): `DELETE /api/v1/todos/{todo_id}` 正常系
+            - [x] 204を返す
+            - [x] レスポンスボディが空である
+          - [x] テスト(API): `DELETE /api/v1/todos/{todo_id}` 異常系
+            - [x] Authorizationヘッダがないと401を返す
+            - [x] 不正JWTで401を返す
+            - [x] 不正な `todo_id` で400を返す
+            - [x] 存在しない `todo_id` で404を返す
       - [ ] テスト(API統合): integration testを実装する
         - [ ] `completed` に boolean 以外を送ったときの400/422を最小1ケースで確認する
     - 画面状態（最低限）:

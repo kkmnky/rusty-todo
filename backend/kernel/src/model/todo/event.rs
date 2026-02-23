@@ -35,3 +35,13 @@ pub struct UpdateTodoCompleted {
     pub id: TodoId,
     pub completed: bool,
 }
+
+pub struct DeleteTodo {
+    pub id: TodoId,
+}
+
+impl DeleteTodo {
+    pub fn new(id: TodoId) -> Self {
+        Self { id }
+    }
+}
