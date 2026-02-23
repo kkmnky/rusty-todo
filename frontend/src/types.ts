@@ -6,8 +6,8 @@ export type User = {
 
 export type Todo = {
   id: string;
+  assignee_user_id: string;
   title: string;
-  status: string;
-  priority: string;
-  due: string;
+  completed: boolean;
+  due_at: string | null;
 };
