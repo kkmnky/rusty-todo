@@ -74,3 +74,14 @@ impl From<RegisterTodoRequest> for RegisterTodoInput {
 pub struct UpdateTodoCompletedRequest {
     pub completed: bool,
 }
+
+#[derive(Deserialize, Validate, new)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateTodoRequest {
+    #[garde(length(min = 1))]
+    pub title: Option<String>,
+    #[garde(skip)]
+    pub assignee_user_id: Option<UserId>,
+    #[garde(skip)]
+    pub due_at: Option<Option<DateTime<Utc>>>,
+}

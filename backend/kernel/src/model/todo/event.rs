@@ -15,6 +15,22 @@ pub struct UpdateTodo {
     pub due_at: Option<DateTime<Utc>>,
 }
 
+impl UpdateTodo {
+    pub fn new(
+        id: TodoId,
+        title: String,
+        assignee_user_id: UserId,
+        due_at: Option<DateTime<Utc>>,
+    ) -> Self {
+        Self {
+            id,
+            title,
+            assignee_user_id,
+            due_at,
+        }
+    }
+}
+
 pub struct UpdateTodoCompleted {
     pub id: TodoId,
     pub completed: bool,

@@ -219,7 +219,7 @@
             - [x] 不正JWTで401を返す
             - [x] 不正な `todo_id` で400を返す
             - [x] 存在しない `todo_id` で404を返す
-      - [ ] Todoを編集する（title / dueAt / assigneeUserId）
+      - [x] Todoを編集する（title / dueAt / assigneeUserId）
         - 一覧上で編集した内容を保存し、更新後の内容を反映する
         - 仕様:
           - `PATCH /api/v1/todos/{todo_id}`
@@ -228,6 +228,9 @@
           - `dueAt: null` は期限解除として扱う
           - 成功時は `200 OK` で更新後のTodoを返す
         - テスト（Adapter → API）:
+          - [x] テスト(Adapter): `find_by_id`（Todo編集の事前取得）
+            - [x] 指定した `todo_id` のTodoを取得できる
+            - [x] 存在しない `todo_id` では `None` を返す
           - [x] テスト(Adapter): Todo編集 正常系
             - [x] `title` のみ更新できる
             - [x] `due_at` のみ更新できる
@@ -237,16 +240,16 @@
           - [x] テスト(Adapter): Todo編集 異常系
             - [x] 存在しない `todo_id` で `EntityNotFoundError` になる
             - [x] 存在しない `assignee_user_id` 指定で `SqlExecuteError` になる
-          - [ ] テスト(API): `PATCH /api/v1/todos/{todo_id}` 正常系
-            - [ ] 200と更新後Todoを返す
-            - [ ] 部分更新時に未指定項目が維持される
-          - [ ] テスト(API): `PATCH /api/v1/todos/{todo_id}` 異常系
-            - [ ] Authorizationヘッダがないと401を返す
-            - [ ] 不正JWTで401を返す
-            - [ ] 不正な `todo_id` で400を返す
-            - [ ] 更新対象項目が1つもないと400を返す
-            - [ ] バリデーションエラー（例: 空title）で400を返す
-            - [ ] 存在しない `todo_id` で404を返す
+          - [x] テスト(API): `PATCH /api/v1/todos/{todo_id}` 正常系
+            - [x] 200と更新後Todoを返す
+            - [x] 部分更新時に未指定項目が維持される
+          - [x] テスト(API): `PATCH /api/v1/todos/{todo_id}` 異常系
+            - [x] Authorizationヘッダがないと401を返す
+            - [x] 不正JWTで401を返す
+            - [x] 不正な `todo_id` で400を返す
+            - [x] 更新対象項目が1つもないと400を返す
+            - [x] バリデーションエラー（例: 空title）で400を返す
+            - [x] 存在しない `todo_id` で404を返す
       - [ ] Todoを削除する
         - 誤操作防止の確認後に削除し、一覧から除外する
       - [ ] テスト(API統合): integration testを実装する

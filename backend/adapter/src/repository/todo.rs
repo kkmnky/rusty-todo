@@ -54,6 +54,32 @@ impl TodoRepository for TodoRepositoryImpl {
         })
     }
 
+    async fn find_by_id(&self, id: TodoId) -> AppResult<Option<Todo>> {
+        let row = sqlx::query_as!(
+            TodoRow,
+            r#"--sql
+                SELECT
+                    id,
+                    user_id,
+                    title,
+                    completed,
+                    due_at,
+                    created_at,
+                    updated_at
+                FROM todos WHERE id = $1
+            "#,
+            id as _,
+        )
+        .fetch_optional(self.db.inner_ref())
+        .await
+        .map_err(AppError::SqlExecuteError)?;
+
+        match row {
+            Some(row) => Ok(Some(Todo::try_from(row)?)),
+            None => Ok(None),
+        }
+    }
+
     async fn find_by_user_id(&self, user_id: UserId) -> AppResult<Vec<Todo>> {
         let rows = sqlx::query_as!(
             TodoRow,
@@ -257,6 +283,43 @@ mod tests {
             .expect("一覧取得が成功する");
 
         assert!(todos.is_empty());
+    }
+
+    #[sqlx::test(fixtures("common", "todo"))]
+    async fn タスク取得はid指定で取得できる(pool: PgPool) {
+        let pool = ConnectionPool::new(pool.clone());
+        let repo = TodoRepositoryImpl::new(pool.clone());
+        let target_todo_id: TodoId = "10f0d6f2-c464-4f4c-92f0-6d87f7324f11"
+            .parse()
+            .expect("todo_id取得");
+        let target_user_id: UserId = "75ef7d75-3b57-4f54-8e8e-fdb65738690c"
+            .parse()
+            .expect("user_id取得");
+
+        let found = repo
+            .find_by_id(target_todo_id)
+            .await
+            .expect("取得が成功する")
+            .expect("タスクが存在する");
+
+        assert_eq!(found.id, target_todo_id);
+        assert_eq!(found.assignee_user_id, target_user_id);
+        assert_eq!(found.title, "target-old");
+        assert!(!found.completed);
+        assert!(found.due_at.is_none());
+    }
+
+    #[sqlx::test(fixtures("common"))]
+    async fn タスク取得は存在しないidならnoneを返す(pool: PgPool) {
+        let pool = ConnectionPool::new(pool.clone());
+        let repo = TodoRepositoryImpl::new(pool.clone());
+
+        let found = repo
+            .find_by_id(TodoId::new())
+            .await
+            .expect("取得が成功する");
+
+        assert!(found.is_none());
     }
 
     #[sqlx::test(fixtures("common", "todo"))]
