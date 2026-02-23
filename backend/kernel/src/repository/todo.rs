@@ -16,4 +16,5 @@ pub trait TodoRepository: Send + Sync {
     async fn find_by_user_id(&self, user_id: UserId) -> AppResult<Vec<Todo>>;
     async fn update(&self, event: UpdateTodo) -> AppResult<Todo>;
     async fn update_completed(&self, event: UpdateTodoCompleted) -> AppResult<Todo>;
+    async fn delete(&self, id: TodoId) -> AppResult<()>;
 }

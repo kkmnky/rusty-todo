@@ -171,6 +171,26 @@ impl TodoRepository for TodoRepositoryImpl {
 
         Ok(todo)
     }
+
+    async fn delete(&self, id: TodoId) -> AppResult<()> {
+        let res = sqlx::query!(
+            r#"--sql
+                DELETE FROM todos WHERE id = $1
+            "#,
+            id as _,
+        )
+        .execute(self.db.inner_ref())
+        .await
+        .map_err(AppError::SqlExecuteError)?;
+
+        if res.rows_affected() == 0 {
+            return Err(AppError::EntityNotFoundError(
+                "No todo has been deleted".into(),
+            ));
+        }
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -667,5 +687,36 @@ mod tests {
             .expect_err("存在しないassignee_user_idでは失敗する");
 
         assert!(matches!(err, AppError::SqlExecuteError(_)));
+    }
+
+    #[sqlx::test(fixtures("common", "todo"))]
+    async fn タスク削除はtodo_id指定で削除できる(pool: PgPool) {
+        let pool = ConnectionPool::new(pool.clone());
+        let repo = TodoRepositoryImpl::new(pool.clone());
+        let target_todo_id: TodoId = "10f0d6f2-c464-4f4c-92f0-6d87f7324f11"
+            .parse()
+            .expect("todo_id取得");
+
+        repo.delete(target_todo_id).await.expect("削除が成功する");
+
+        let found = repo
+            .find_by_id(target_todo_id)
+            .await
+            .expect("取得が成功する");
+
+        assert!(found.is_none());
+    }
+
+    #[sqlx::test(fixtures("common"))]
+    async fn タスク削除は存在しないtodo_idで失敗する(pool: PgPool) {
+        let pool = ConnectionPool::new(pool.clone());
+        let repo = TodoRepositoryImpl::new(pool.clone());
+
+        let err = repo
+            .delete(TodoId::new())
+            .await
+            .expect_err("存在しないtodo_idでは失敗する");
+
+        assert!(matches!(err, AppError::EntityNotFoundError(_)));
     }
 }
